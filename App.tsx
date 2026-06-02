@@ -19,27 +19,37 @@ import ParentScreen from './screens/ParentScreen';
 
 const Stack = createNativeStackNavigator();
 
-const ROLES = [
-  {key: 'admin', label: 'Admin', icon: '⚙'},
-  {key: 'teacher', label: 'Teacher', icon: '📚'},
-  {key: 'student', label: 'Student', icon: '🎓'},
-  {key: 'parent', label: 'Parent', icon: '👨‍👩‍👧'},
-];
+const detectRole = (userId: string): string | null => {
+  const upper = userId.toUpperCase();
+  if (upper.includes('-ADM-')) return 'admin';
+  if (upper.includes('-TCH-')) return 'teacher';
+  if (upper.includes('-STU-')) return 'student';
+  if (upper.includes('-PAR-')) return 'parent';
+  return null;
+};
+
+const ROLE_INFO: any = {
+  admin:   {label: 'Admin',   icon: '⚙',        color: '#7c3aed'},
+  teacher: {label: 'Teacher', icon: '📚',        color: '#0891b2'},
+  student: {label: 'Student', icon: '🎓',        color: '#16a34a'},
+  parent:  {label: 'Parent',  icon: '👨‍👩‍👧', color: '#ea580c'},
+};
 
 function LoginScreen({navigation}: any) {
-  const [role, setRole] = useState('');
   const [id, setId] = useState('');
   const [pass, setPass] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const detectedRole = detectRole(id);
+
   const handleLogin = async () => {
-    if (!role) {
-      setError('Please select a role first');
+    if (!id || !pass) {
+      setError('Please enter your ID and password');
       return;
     }
-    if (!id || !pass) {
-      setError('Please enter ID and password');
+    if (!detectedRole) {
+      setError('Invalid ID. Please check and try again.');
       return;
     }
 
@@ -47,13 +57,13 @@ function LoginScreen({navigation}: any) {
     setError('');
 
     try {
-      const email = `${id}@quantaip.edu.pk`;
+      const email = `${id.toLowerCase()}@quantaip.edu.pk`;
       await auth().signInWithEmailAndPassword(email, pass);
 
-      if (role === 'admin') navigation.navigate('Admin');
-      else if (role === 'teacher') navigation.navigate('Teacher');
-      else if (role === 'student') navigation.navigate('Student');
-      else if (role === 'parent') navigation.navigate('Parent');
+      if (detectedRole === 'admin') navigation.navigate('Admin');
+      else if (detectedRole === 'teacher') navigation.navigate('Teacher');
+      else if (detectedRole === 'student') navigation.navigate('Student');
+      else if (detectedRole === 'parent') navigation.navigate('Parent');
 
     } catch (e: any) {
       setError('Invalid ID or password. Please try again.');
@@ -66,6 +76,7 @@ function LoginScreen({navigation}: any) {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" />
 
+      {/* NAVBAR */}
       <View style={styles.navbar}>
         <Text style={styles.brand}>
           QUANT<Text style={styles.brandAccent}>AIP</Text>
@@ -75,41 +86,43 @@ function LoginScreen({navigation}: any) {
 
       <ScrollView contentContainerStyle={styles.scroll}>
 
+        {/* HEADER */}
         <View style={styles.header}>
           <Text style={styles.headerEye}>SECURE LOGIN</Text>
           <Text style={styles.headerTitle}>
             Welcome <Text style={styles.headerAccent}>Back</Text>
           </Text>
-          <Text style={styles.headerSub}>Sign in to your account</Text>
+          <Text style={styles.headerSub}>Enter your ID to sign in</Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.fieldLabel}>SELECT YOUR ROLE</Text>
-          <View style={styles.roleGrid}>
-            {ROLES.map(r => (
-              <TouchableOpacity
-                key={r.key}
-                style={[styles.roleBtn, role === r.key && styles.roleBtnOn]}
-                onPress={() => setRole(r.key)}
-                activeOpacity={0.7}>
-                <Text style={styles.roleIcon}>{r.icon}</Text>
-                <Text style={[styles.roleLabel, role === r.key && styles.roleLabelOn]}>
-                  {r.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        {/* ROLE DETECTED BADGE */}
+        {detectedRole ? (
+          <View style={[styles.roleBadge, {
+            borderColor: ROLE_INFO[detectedRole].color,
+            backgroundColor: ROLE_INFO[detectedRole].color + '15',
+          }]}>
+            <Text style={styles.roleBadgeIcon}>{ROLE_INFO[detectedRole].icon}</Text>
+            <Text style={[styles.roleBadgeTxt, {color: ROLE_INFO[detectedRole].color}]}>
+              {ROLE_INFO[detectedRole].label} account detected
+            </Text>
           </View>
-        </View>
+        ) : id.length > 3 ? (
+          <View style={styles.roleBadgeInvalid}>
+            <Text style={styles.roleBadgeInvalidTxt}>⚠ Invalid ID format</Text>
+          </View>
+        ) : null}
 
+        {/* LOGIN FORM */}
         <View style={styles.card}>
-          <Text style={styles.fieldLabel}>STUDENT / STAFF ID</Text>
+          <Text style={styles.fieldLabel}>YOUR ID</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g. GHS-001-STU-0001"
+            placeholder="Enter your ID"
             placeholderTextColor="#c4b5fd"
             value={id}
             onChangeText={setId}
             autoCapitalize="none"
+            autoCorrect={false}
           />
 
           <Text style={[styles.fieldLabel, {marginTop: 14}]}>PASSWORD</Text>
@@ -127,27 +140,31 @@ function LoginScreen({navigation}: any) {
           ) : null}
 
           <TouchableOpacity
-            style={[styles.loginBtn, (!role || loading) && styles.loginBtnDisabled]}
+            style={[
+              styles.loginBtn,
+              (!detectedRole || loading) && styles.loginBtnDisabled,
+              detectedRole && {backgroundColor: ROLE_INFO[detectedRole].color},
+            ]}
             onPress={handleLogin}
-            disabled={loading}
+            disabled={!detectedRole || loading}
             activeOpacity={0.8}>
             {loading ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
               <Text style={styles.loginBtnTxt}>
-                {role ? `Login as ${ROLES.find(r => r.key === role)?.label}` : 'Select a role first'}
+                {detectedRole
+                  ? `Login as ${ROLE_INFO[detectedRole].label} →`
+                  : 'Enter your ID first'}
               </Text>
             )}
           </TouchableOpacity>
         </View>
 
-        <View style={styles.badges}>
-          <View style={styles.badge}><Text style={styles.badgeTxt}>SECURE</Text></View>
-          <View style={styles.badge}><Text style={styles.badgeTxt}>ENCRYPTED</Text></View>
-          <View style={styles.badge}><Text style={styles.badgeTxt}>QUANTAIP</Text></View>
+        {/* FOOTER */}
+        <View style={styles.footerRow}>
+          <Text style={styles.footerLock}>🔒</Text>
+          <Text style={styles.footerTxt}>Secured by QUANTAIP · quantaip.org</Text>
         </View>
-
-        <Text style={styles.footer}>QUANTAIP © 2026 — QUANTUM AI PAKISTAN</Text>
 
       </ScrollView>
     </View>
@@ -199,6 +216,26 @@ const styles = StyleSheet.create({
   },
   headerAccent: {color: '#7c3aed'},
   headerSub: {fontSize: 14, color: '#6b7280'},
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginBottom: 12,
+  },
+  roleBadgeIcon: {fontSize: 18},
+  roleBadgeTxt: {fontSize: 14, fontWeight: '700'},
+  roleBadgeInvalid: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  roleBadgeInvalidTxt: {fontSize: 13, color: '#ef4444', fontWeight: '600'},
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
@@ -214,28 +251,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 10,
   },
-  roleGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  roleBtn: {
-    width: '47%',
-    borderWidth: 1.5,
-    borderColor: '#ede9fe',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-    backgroundColor: '#faf5ff',
-    gap: 4,
-  },
-  roleBtnOn: {
-    borderColor: '#7c3aed',
-    backgroundColor: '#f5f3ff',
-  },
-  roleIcon: {fontSize: 20},
-  roleLabel: {fontSize: 13, fontWeight: '500', color: '#6b7280'},
-  roleLabelOn: {color: '#5b21b6', fontWeight: '700'},
   input: {
     backgroundColor: '#f5f3ff',
     borderWidth: 1.5,
@@ -255,7 +270,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   loginBtn: {
-    backgroundColor: '#1e1b4b',
     borderRadius: 10,
     padding: 15,
     alignItems: 'center',
@@ -263,20 +277,13 @@ const styles = StyleSheet.create({
   },
   loginBtnDisabled: {backgroundColor: '#c4b5fd'},
   loginBtnTxt: {color: '#ffffff', fontSize: 15, fontWeight: '700'},
-  badges: {
+  footerRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: 16,
+    gap: 6,
+    marginBottom: 10,
   },
-  badge: {
-    borderWidth: 1,
-    borderColor: '#ede9fe',
-    backgroundColor: '#f5f3ff',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-  badgeTxt: {fontSize: 10, fontWeight: '600', color: '#7c3aed', letterSpacing: 1},
-  footer: {textAlign: 'center', fontSize: 10, color: '#c4b5fd', letterSpacing: 1},
+  footerLock: {fontSize: 12},
+  footerTxt: {fontSize: 11, color: '#a78bfa', fontWeight: '500'},
 });
