@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "676753188837",
+    "project_id": "quantaip-eduapp",
+    "storage_bucket": "quantaip-eduapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:676753188837:android:08ee145fdbd955e58ff10c",
+        "android_client_info": {
+          "package_name": "com.quantaipapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAeTAwG2-hZmGadQcwko33GF6rV956bAzs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

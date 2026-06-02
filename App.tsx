@@ -1,3 +1,4 @@
+import auth from '@react-native-firebase/auth';
 import React, {useState} from 'react';
 import {
   View,
@@ -7,6 +8,7 @@ import {
   StyleSheet,
   StatusBar,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
@@ -28,20 +30,42 @@ function LoginScreen({navigation}: any) {
   const [role, setRole] = useState('');
   const [id, setId] = useState('');
   const [pass, setPass] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleLogin = () => {
-    if (!role) return;
-    if (role === 'admin') navigation.navigate('Admin');
-    else if (role === 'teacher') navigation.navigate('Teacher');
-    else if (role === 'student') navigation.navigate('Student');
-    else if (role === 'parent') navigation.navigate('Parent');
+  const handleLogin = async () => {
+    if (!role) {
+      setError('Please select a role first');
+      return;
+    }
+    if (!id || !pass) {
+      setError('Please enter ID and password');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const email = `${id}@quantaip.edu.pk`;
+      await auth().signInWithEmailAndPassword(email, pass);
+
+      if (role === 'admin') navigation.navigate('Admin');
+      else if (role === 'teacher') navigation.navigate('Teacher');
+      else if (role === 'student') navigation.navigate('Student');
+      else if (role === 'parent') navigation.navigate('Parent');
+
+    } catch (e: any) {
+      setError('Invalid ID or password. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" />
 
-      {/* NAVBAR */}
       <View style={styles.navbar}>
         <Text style={styles.brand}>
           QUANT<Text style={styles.brandAccent}>AIP</Text>
@@ -51,7 +75,6 @@ function LoginScreen({navigation}: any) {
 
       <ScrollView contentContainerStyle={styles.scroll}>
 
-        {/* HEADER */}
         <View style={styles.header}>
           <Text style={styles.headerEye}>SECURE LOGIN</Text>
           <Text style={styles.headerTitle}>
@@ -60,7 +83,6 @@ function LoginScreen({navigation}: any) {
           <Text style={styles.headerSub}>Sign in to your account</Text>
         </View>
 
-        {/* ROLE SELECTOR */}
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>SELECT YOUR ROLE</Text>
           <View style={styles.roleGrid}>
@@ -79,7 +101,6 @@ function LoginScreen({navigation}: any) {
           </View>
         </View>
 
-        {/* LOGIN FORM */}
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>STUDENT / STAFF ID</Text>
           <TextInput
@@ -101,24 +122,31 @@ function LoginScreen({navigation}: any) {
             secureTextEntry
           />
 
+          {error ? (
+            <Text style={styles.errorTxt}>{error}</Text>
+          ) : null}
+
           <TouchableOpacity
-            style={[styles.loginBtn, !role && styles.loginBtnDisabled]}
+            style={[styles.loginBtn, (!role || loading) && styles.loginBtnDisabled]}
             onPress={handleLogin}
+            disabled={loading}
             activeOpacity={0.8}>
-            <Text style={styles.loginBtnTxt}>
-              {role ? `Login as ${ROLES.find(r => r.key === role)?.label}` : 'Select a role first'}
-            </Text>
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.loginBtnTxt}>
+                {role ? `Login as ${ROLES.find(r => r.key === role)?.label}` : 'Select a role first'}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* BADGES */}
         <View style={styles.badges}>
           <View style={styles.badge}><Text style={styles.badgeTxt}>SECURE</Text></View>
           <View style={styles.badge}><Text style={styles.badgeTxt}>ENCRYPTED</Text></View>
           <View style={styles.badge}><Text style={styles.badgeTxt}>QUANTAIP</Text></View>
         </View>
 
-        {/* FOOTER */}
         <Text style={styles.footer}>QUANTAIP © 2026 — QUANTUM AI PAKISTAN</Text>
 
       </ScrollView>
@@ -142,8 +170,6 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: {flex: 1, backgroundColor: '#faf5ff'},
-
-  // NAVBAR
   navbar: {
     backgroundColor: '#1e1b4b',
     paddingTop: 50,
@@ -153,23 +179,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  brand: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#ffffff',
-    letterSpacing: 2,
-  },
+  brand: {fontSize: 20, fontWeight: '700', color: '#ffffff', letterSpacing: 2},
   brandAccent: {color: '#a78bfa'},
-  navSub: {
-    fontSize: 9,
-    letterSpacing: 3,
-    color: 'rgba(255,255,255,0.5)',
-  },
-
-  // SCROLL
+  navSub: {fontSize: 9, letterSpacing: 3, color: 'rgba(255,255,255,0.5)'},
   scroll: {padding: 16, paddingBottom: 40},
-
-  // HEADER
   header: {alignItems: 'center', marginVertical: 24},
   headerEye: {
     fontSize: 10,
@@ -186,8 +199,6 @@ const styles = StyleSheet.create({
   },
   headerAccent: {color: '#7c3aed'},
   headerSub: {fontSize: 14, color: '#6b7280'},
-
-  // CARD
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
@@ -196,8 +207,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ede9fe',
   },
-
-  // FIELD LABEL
   fieldLabel: {
     fontSize: 11,
     fontWeight: '600',
@@ -205,8 +214,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 10,
   },
-
-  // ROLE GRID
   roleGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -227,17 +234,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f3ff',
   },
   roleIcon: {fontSize: 20},
-  roleLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#6b7280',
-  },
-  roleLabelOn: {
-    color: '#5b21b6',
-    fontWeight: '700',
-  },
-
-  // INPUT
+  roleLabel: {fontSize: 13, fontWeight: '500', color: '#6b7280'},
+  roleLabelOn: {color: '#5b21b6', fontWeight: '700'},
   input: {
     backgroundColor: '#f5f3ff',
     borderWidth: 1.5,
@@ -248,8 +246,14 @@ const styles = StyleSheet.create({
     color: '#1e1b4b',
     fontWeight: '500',
   },
-
-  // LOGIN BUTTON
+  errorTxt: {
+    fontSize: 13,
+    color: '#ef4444',
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+    fontWeight: '500',
+  },
   loginBtn: {
     backgroundColor: '#1e1b4b',
     borderRadius: 10,
@@ -257,16 +261,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
   },
-  loginBtnDisabled: {
-    backgroundColor: '#c4b5fd',
-  },
-  loginBtnTxt: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  // BADGES
+  loginBtnDisabled: {backgroundColor: '#c4b5fd'},
+  loginBtnTxt: {color: '#ffffff', fontSize: 15, fontWeight: '700'},
   badges: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -281,18 +277,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 20,
   },
-  badgeTxt: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#7c3aed',
-    letterSpacing: 1,
-  },
-
-  // FOOTER
-  footer: {
-    textAlign: 'center',
-    fontSize: 10,
-    color: '#c4b5fd',
-    letterSpacing: 1,
-  },
+  badgeTxt: {fontSize: 10, fontWeight: '600', color: '#7c3aed', letterSpacing: 1},
+  footer: {textAlign: 'center', fontSize: 10, color: '#c4b5fd', letterSpacing: 1},
 });
