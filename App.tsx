@@ -1,4 +1,3 @@
-import auth from '@react-native-firebase/auth';
 import React, {useState} from 'react';
 import {
   View,
@@ -10,8 +9,18 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import auth from '@react-native-firebase/auth';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {
+  LockClosedIcon,
+  UserIcon,
+  AcademicCapIcon,
+  UsersIcon,
+  ShieldCheckIcon,
+  ArrowRightIcon,
+  ExclamationCircleIcon,
+} from 'react-native-heroicons/outline';
 import AdminScreen from './screens/AdminScreen';
 import TeacherScreen from './screens/TeacherScreen';
 import StudentScreen from './screens/StudentScreen';
@@ -29,11 +38,19 @@ const detectRole = (userId: string): string | null => {
 };
 
 const ROLE_INFO: any = {
-  admin:   {label: 'Admin',   icon: '⚙',        color: '#7c3aed'},
-  teacher: {label: 'Teacher', icon: '📚',        color: '#0891b2'},
-  student: {label: 'Student', icon: '🎓',        color: '#16a34a'},
-  parent:  {label: 'Parent',  icon: '👨‍👩‍👧', color: '#ea580c'},
+  admin:   {label: 'Admin',   color: '#7c3aed'},
+  teacher: {label: 'Teacher', color: '#0891b2'},
+  student: {label: 'Student', color: '#16a34a'},
+  parent:  {label: 'Parent',  color: '#ea580c'},
 };
+
+function RoleIcon({role, size, color}: {role: string, size: number, color: string}) {
+  if (role === 'admin') return <ShieldCheckIcon size={size} color={color} />;
+  if (role === 'teacher') return <AcademicCapIcon size={size} color={color} />;
+  if (role === 'student') return <UserIcon size={size} color={color} />;
+  if (role === 'parent') return <UsersIcon size={size} color={color} />;
+  return null;
+}
 
 function LoginScreen({navigation}: any) {
   const [id, setId] = useState('');
@@ -52,19 +69,15 @@ function LoginScreen({navigation}: any) {
       setError('Invalid ID. Please check and try again.');
       return;
     }
-
     setLoading(true);
     setError('');
-
     try {
       const email = `${id.toLowerCase()}@quantaip.edu.pk`;
       await auth().signInWithEmailAndPassword(email, pass);
-
       if (detectedRole === 'admin') navigation.navigate('Admin');
       else if (detectedRole === 'teacher') navigation.navigate('Teacher');
       else if (detectedRole === 'student') navigation.navigate('Student');
       else if (detectedRole === 'parent') navigation.navigate('Parent');
-
     } catch (e: any) {
       setError('Invalid ID or password. Please try again.');
     } finally {
@@ -88,6 +101,9 @@ function LoginScreen({navigation}: any) {
 
         {/* HEADER */}
         <View style={styles.header}>
+          <View style={styles.lockIcon}>
+            <LockClosedIcon size={28} color="#7c3aed" />
+          </View>
           <Text style={styles.headerEye}>SECURE LOGIN</Text>
           <Text style={styles.headerTitle}>
             Welcome <Text style={styles.headerAccent}>Back</Text>
@@ -101,42 +117,52 @@ function LoginScreen({navigation}: any) {
             borderColor: ROLE_INFO[detectedRole].color,
             backgroundColor: ROLE_INFO[detectedRole].color + '15',
           }]}>
-            <Text style={styles.roleBadgeIcon}>{ROLE_INFO[detectedRole].icon}</Text>
+            <RoleIcon role={detectedRole} size={20} color={ROLE_INFO[detectedRole].color} />
             <Text style={[styles.roleBadgeTxt, {color: ROLE_INFO[detectedRole].color}]}>
               {ROLE_INFO[detectedRole].label} account detected
             </Text>
           </View>
         ) : id.length > 3 ? (
           <View style={styles.roleBadgeInvalid}>
-            <Text style={styles.roleBadgeInvalidTxt}>⚠ Invalid ID format</Text>
+            <ExclamationCircleIcon size={16} color="#ef4444" />
+            <Text style={styles.roleBadgeInvalidTxt}> Invalid ID format</Text>
           </View>
         ) : null}
 
         {/* LOGIN FORM */}
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>YOUR ID</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your ID"
-            placeholderTextColor="#c4b5fd"
-            value={id}
-            onChangeText={setId}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          <View style={styles.inputWrap}>
+            <UserIcon size={18} color="#c4b5fd" />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your ID"
+              placeholderTextColor="#c4b5fd"
+              value={id}
+              onChangeText={setId}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
 
           <Text style={[styles.fieldLabel, {marginTop: 14}]}>PASSWORD</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your password"
-            placeholderTextColor="#c4b5fd"
-            value={pass}
-            onChangeText={setPass}
-            secureTextEntry
-          />
+          <View style={styles.inputWrap}>
+            <LockClosedIcon size={18} color="#c4b5fd" />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your password"
+              placeholderTextColor="#c4b5fd"
+              value={pass}
+              onChangeText={setPass}
+              secureTextEntry
+            />
+          </View>
 
           {error ? (
-            <Text style={styles.errorTxt}>{error}</Text>
+            <View style={styles.errorWrap}>
+              <ExclamationCircleIcon size={14} color="#ef4444" />
+              <Text style={styles.errorTxt}> {error}</Text>
+            </View>
           ) : null}
 
           <TouchableOpacity
@@ -151,19 +177,22 @@ function LoginScreen({navigation}: any) {
             {loading ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.loginBtnTxt}>
-                {detectedRole
-                  ? `Login as ${ROLE_INFO[detectedRole].label} →`
-                  : 'Enter your ID first'}
-              </Text>
+              <View style={styles.loginBtnInner}>
+                <Text style={styles.loginBtnTxt}>
+                  {detectedRole
+                    ? `Login as ${ROLE_INFO[detectedRole].label}`
+                    : 'Enter your ID first'}
+                </Text>
+                {detectedRole && <ArrowRightIcon size={18} color="#ffffff" />}
+              </View>
             )}
           </TouchableOpacity>
         </View>
 
         {/* FOOTER */}
         <View style={styles.footerRow}>
-          <Text style={styles.footerLock}>🔒</Text>
-          <Text style={styles.footerTxt}>Secured by QUANTAIP · quantaip.org</Text>
+          <ShieldCheckIcon size={13} color="#a78bfa" />
+          <Text style={styles.footerTxt}> Secured by QUANTAIP · quantaip.org</Text>
         </View>
 
       </ScrollView>
@@ -201,19 +230,19 @@ const styles = StyleSheet.create({
   navSub: {fontSize: 9, letterSpacing: 3, color: 'rgba(255,255,255,0.5)'},
   scroll: {padding: 16, paddingBottom: 40},
   header: {alignItems: 'center', marginVertical: 24},
-  headerEye: {
-    fontSize: 10,
-    letterSpacing: 4,
-    color: '#7c3aed',
-    fontWeight: '600',
-    marginBottom: 8,
+  lockIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#f5f3ff',
+    borderWidth: 1,
+    borderColor: '#ede9fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#1e1b4b',
-    marginBottom: 6,
-  },
+  headerEye: {fontSize: 10, letterSpacing: 4, color: '#7c3aed', fontWeight: '600', marginBottom: 8},
+  headerTitle: {fontSize: 32, fontWeight: '700', color: '#1e1b4b', marginBottom: 6},
   headerAccent: {color: '#7c3aed'},
   headerSub: {fontSize: 14, color: '#6b7280'},
   roleBadge: {
@@ -225,9 +254,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     marginBottom: 12,
   },
-  roleBadgeIcon: {fontSize: 18},
   roleBadgeTxt: {fontSize: 14, fontWeight: '700'},
   roleBadgeInvalid: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#fef2f2',
     borderWidth: 1,
     borderColor: '#fecaca',
@@ -244,31 +274,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ede9fe',
   },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#7c3aed',
-    letterSpacing: 2,
-    marginBottom: 10,
-  },
-  input: {
+  fieldLabel: {fontSize: 11, fontWeight: '600', color: '#7c3aed', letterSpacing: 2, marginBottom: 10},
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: '#f5f3ff',
     borderWidth: 1.5,
     borderColor: '#ede9fe',
     borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  input: {
+    flex: 1,
     padding: 13,
     fontSize: 14,
     color: '#1e1b4b',
     fontWeight: '500',
   },
-  errorTxt: {
-    fontSize: 13,
-    color: '#ef4444',
-    textAlign: 'center',
+  errorWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 10,
     marginBottom: 4,
-    fontWeight: '500',
   },
+  errorTxt: {fontSize: 13, color: '#ef4444', fontWeight: '500'},
   loginBtn: {
     borderRadius: 10,
     padding: 15,
@@ -276,14 +306,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   loginBtnDisabled: {backgroundColor: '#c4b5fd'},
+  loginBtnInner: {flexDirection: 'row', alignItems: 'center', gap: 8},
   loginBtnTxt: {color: '#ffffff', fontSize: 15, fontWeight: '700'},
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
     marginBottom: 10,
   },
-  footerLock: {fontSize: 12},
   footerTxt: {fontSize: 11, color: '#a78bfa', fontWeight: '500'},
 });
