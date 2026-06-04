@@ -8,15 +8,17 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import {
   BanknotesIcon,
   CheckCircleIcon,
   ClockIcon,
-  ExclamationCircleIcon,
   ChartBarIcon,
   AdjustmentsHorizontalIcon,
+  XMarkIcon,
+  UserIcon,
 } from 'react-native-heroicons/outline';
 
 const SCHOOL_CODE = 'GHS-001';
@@ -28,42 +30,79 @@ const CLASS_HIERARCHY = [
   {category: 'Secondary', classes: ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']},
 ];
 
+const FEE_TYPES = [
+  {key: 'standard', label: 'Standard'},
+  {key: 'scholarship', label: 'Scholarship %'},
+  {key: 'discount', label: 'Fixed Discount'},
+  {key: 'full_scholarship', label: 'Full Scholarship'},
+  {key: 'kinship', label: 'Kinship %'},
+];
+
+const calculateFee = (student: any, standardFee: number): number => {
+  if (!standardFee) return 0;
+  switch (student.feeType) {
+    case 'full_scholarship': return 0;
+    case 'scholarship':
+    case 'kinship':
+      return Math.round(standardFee - (standardFee * (student.feeDiscount || 0) / 100));
+    case 'discount':
+      return Math.max(0, standardFee - (student.feeDiscount || 0));
+    default:
+      return standardFee;
+  }
+};
+
 export default function FeeScreen() {
   const [activeTab, setActiveTab] = useState('Students');
   const [loading, setLoading] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
-  const [feeStructure, setFeeStructure] = useState<{[key: string]: string}>({});
+  const [feeStructure, setFeeStructure] = useState<{[key: string]: number}>({});
+  const [feeInputs, setFeeInputs] = useState<{[key: string]: string}>({});
   const [selectedClass, setSelectedClass] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
+
+  // Fee type modal
+  const [feeModal, setFeeModal] = useState<any>(null);
+  const [feeType, setFeeType] = useState('standard');
+  const [feeDiscount, setFeeDiscount] = useState('');
 
   const TABS = ['Students', 'Structure', 'Reports'];
   const month = new Date().toLocaleString('default', {month: 'long', year: 'numeric'});
 
-  // Load all students with fee status
   useEffect(() => {
     loadStudents();
+    loadFeeStructure();
   }, []);
+
+  const loadFeeStructure = async () => {
+    try {
+      const snap = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('feeStructure').get();
+      const structure: {[key: string]: number} = {};
+      snap.docs.forEach(d => {
+        structure[d.id] = d.data().amount || 0;
+      });
+      setFeeStructure(structure);
+    } catch (e) {}
+  };
 
   const loadStudents = async () => {
     setLoading(true);
     try {
       const snapshot = await firestore()
         .collection('schools').doc(SCHOOL_CODE)
-        .collection('students')
-        .get();
+        .collection('students').get();
 
       const studentList = await Promise.all(
         snapshot.docs.map(async doc => {
           const student = doc.data();
-          // Check fee status for current month
           const feeDoc = await firestore()
             .collection('schools').doc(SCHOOL_CODE)
             .collection('fees').doc(month)
             .collection('students').doc(student.id)
             .get();
-
           const feeData = feeDoc.exists ? feeDoc.data() : null;
-
           return {
             ...student,
             feeStatus: feeData?.status || 'pending',
@@ -72,7 +111,6 @@ export default function FeeScreen() {
           };
         })
       );
-
       setStudents(studentList);
     } catch (e) {
       setStudents([]);
@@ -81,45 +119,80 @@ export default function FeeScreen() {
     }
   };
 
+  const saveFeeStructure = async (cls: string, amount: string) => {
+    if (!amount) return;
+    try {
+      const amountNum = parseInt(amount);
+      await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('feeStructure').doc(cls)
+        .set({amount: amountNum, updatedAt: firestore.FieldValue.serverTimestamp()});
+      setFeeStructure(prev => ({...prev, [cls]: amountNum}));
+      Alert.alert('✅ Saved!', `Fee for ${cls}: PKR ${amountNum.toLocaleString()}/month`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
+  const saveFeeType = async () => {
+    if (!feeModal) return;
+    try {
+      const updateData: any = {feeType, feeDiscount: 0};
+      if (feeType !== 'standard' && feeType !== 'full_scholarship') {
+        updateData.feeDiscount = parseInt(feeDiscount) || 0;
+      }
+
+      await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('students').doc(feeModal.id)
+        .update(updateData);
+
+      setStudents(prev => prev.map(s =>
+        s.id === feeModal.id ? {...s, ...updateData} : s
+      ));
+
+      Alert.alert('✅ Updated!', `Fee type updated for ${feeModal.fullName || feeModal.name}`);
+      setFeeModal(null);
+      setFeeType('standard');
+      setFeeDiscount('');
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
   const markPaid = async (student: any) => {
+    const standardFee = feeStructure[student.class] || 0;
+    const finalFee = calculateFee(student, standardFee);
+
     Alert.alert(
       'Mark as Paid?',
-      `Mark ${student.fullName}'s fee as paid for ${month}?`,
+      `${student.fullName || student.name}\nAmount: PKR ${finalFee.toLocaleString()}`,
       [
         {text: 'Cancel'},
         {
           text: 'Mark Paid',
           onPress: async () => {
             try {
-              // Get fee amount from structure
-              const feeDoc = await firestore()
-                .collection('schools').doc(SCHOOL_CODE)
-                .collection('feeStructure').doc(student.class)
-                .get();
-              const amount = feeDoc.exists ? feeDoc.data()?.amount : 0;
-
               await firestore()
                 .collection('schools').doc(SCHOOL_CODE)
                 .collection('fees').doc(month)
                 .collection('students').doc(student.id)
                 .set({
                   id: student.id,
-                  name: student.fullName,
-                  class: student.class,
-                  section: student.section,
-                  amount,
+                  name: student.fullName || student.name || '',
+                  class: student.class || '',
+                  section: student.section || '',
+                  amount: finalFee,
                   status: 'paid',
                   paidOn: firestore.FieldValue.serverTimestamp(),
                 });
 
-              // Update local state
               setStudents(prev => prev.map(s =>
                 s.id === student.id
-                  ? {...s, feeStatus: 'paid', feeAmount: amount}
+                  ? {...s, feeStatus: 'paid', feeAmount: finalFee}
                   : s
               ));
-
-              Alert.alert('✅ Done!', `${student.fullName}'s fee marked as paid.`);
+              Alert.alert('✅ Done!', `Fee marked as paid!`);
             } catch (e: any) {
               Alert.alert('Error', e.message);
             }
@@ -130,9 +203,7 @@ export default function FeeScreen() {
   };
 
   const markUnpaid = async (student: any) => {
-    Alert.alert(
-      'Mark as Unpaid?',
-      `Remove ${student.fullName}'s fee payment for ${month}?`,
+    Alert.alert('Mark as Unpaid?', `Remove ${student.fullName || student.name}'s payment?`,
       [
         {text: 'Cancel'},
         {
@@ -146,12 +217,11 @@ export default function FeeScreen() {
                 .collection('students').doc(student.id)
                 .set({
                   id: student.id,
-                  name: student.fullName,
-                  class: student.class,
-                  section: student.section,
+                  name: student.fullName || student.name || '',
+                  class: student.class || '',
+                  section: student.section || '',
                   status: 'pending',
                 });
-
               setStudents(prev => prev.map(s =>
                 s.id === student.id ? {...s, feeStatus: 'pending'} : s
               ));
@@ -164,20 +234,6 @@ export default function FeeScreen() {
     );
   };
 
-  const saveFeeStructure = async (cls: string, amount: string) => {
-    if (!amount) return;
-    try {
-      await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
-        .collection('feeStructure').doc(cls)
-        .set({amount: parseInt(amount), updatedAt: firestore.FieldValue.serverTimestamp()});
-      Alert.alert('✅ Saved!', `Fee for ${cls}: PKR ${amount}/month`);
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    }
-  };
-
-  // Filter students
   const filteredStudents = students.filter(s => {
     const classMatch = selectedClass === 'All' || s.class === selectedClass;
     const statusMatch = filterStatus === 'All' || s.feeStatus === filterStatus.toLowerCase();
@@ -187,11 +243,104 @@ export default function FeeScreen() {
   const paidCount = students.filter(s => s.feeStatus === 'paid').length;
   const pendingCount = students.filter(s => s.feeStatus === 'pending').length;
   const collectionRate = students.length > 0
-    ? Math.round((paidCount / students.length) * 100)
-    : 0;
+    ? Math.round((paidCount / students.length) * 100) : 0;
+
+  const getFeeLabel = (student: any) => {
+    const std = feeStructure[student.class] || 0;
+    const final = calculateFee(student, std);
+    if (!std) return 'Fee not set';
+    if (student.feeType === 'full_scholarship') return 'Full Scholarship';
+    if (student.feeType === 'scholarship') return `${student.feeDiscount}% Scholarship · PKR ${final.toLocaleString()}`;
+    if (student.feeType === 'kinship') return `${student.feeDiscount}% Kinship · PKR ${final.toLocaleString()}`;
+    if (student.feeType === 'discount') return `PKR ${student.feeDiscount} Off · PKR ${final.toLocaleString()}`;
+    return `PKR ${final.toLocaleString()}`;
+  };
 
   return (
     <View style={styles.root}>
+
+      {/* FEE TYPE MODAL */}
+      <Modal visible={!!feeModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Set Fee Type</Text>
+              <TouchableOpacity onPress={() => setFeeModal(null)}>
+                <XMarkIcon size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalStudent}>{feeModal?.fullName || feeModal?.name}</Text>
+            <Text style={styles.modalClass}>{feeModal?.class} — Standard: PKR {(feeStructure[feeModal?.class] || 0).toLocaleString()}</Text>
+
+            {/* Fee type selector */}
+            <Text style={styles.modalLabel}>Fee Type</Text>
+            <View style={styles.feeTypeGrid}>
+              {FEE_TYPES.map(ft => (
+                <TouchableOpacity key={ft.key}
+                  style={[styles.feeTypeBtn, feeType === ft.key && styles.feeTypeBtnOn]}
+                  onPress={() => setFeeType(ft.key)}>
+                  <Text style={[styles.feeTypeTxt, feeType === ft.key && styles.feeTypeTxtOn]}>
+                    {ft.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Discount input */}
+            {(feeType === 'scholarship' || feeType === 'kinship') && (
+              <View style={styles.discountBox}>
+                <Text style={styles.modalLabel}>Discount Percentage</Text>
+                <TextInput
+                  style={styles.discountInput}
+                  placeholder="e.g. 50"
+                  placeholderTextColor="#c4b5fd"
+                  keyboardType="number-pad"
+                  value={feeDiscount}
+                  onChangeText={setFeeDiscount}
+                />
+                <Text style={styles.discountHint}>
+                  Final fee: PKR {calculateFee(
+                    {feeType, feeDiscount: parseInt(feeDiscount) || 0},
+                    feeStructure[feeModal?.class] || 0
+                  ).toLocaleString()}
+                </Text>
+              </View>
+            )}
+
+            {feeType === 'discount' && (
+              <View style={styles.discountBox}>
+                <Text style={styles.modalLabel}>Discount Amount (PKR)</Text>
+                <TextInput
+                  style={styles.discountInput}
+                  placeholder="e.g. 1000"
+                  placeholderTextColor="#c4b5fd"
+                  keyboardType="number-pad"
+                  value={feeDiscount}
+                  onChangeText={setFeeDiscount}
+                />
+                <Text style={styles.discountHint}>
+                  Final fee: PKR {calculateFee(
+                    {feeType, feeDiscount: parseInt(feeDiscount) || 0},
+                    feeStructure[feeModal?.class] || 0
+                  ).toLocaleString()}
+                </Text>
+              </View>
+            )}
+
+            {feeType === 'full_scholarship' && (
+              <View style={styles.discountBox}>
+                <Text style={[styles.discountHint, {color: '#16a34a'}]}>
+                  Student will pay PKR 0 — Full Scholarship!
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity style={styles.modalSaveBtn} onPress={saveFeeType}>
+              <Text style={styles.modalSaveTxt}>Save Fee Type</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* SUB TABS */}
       <View style={styles.subTabRow}>
@@ -206,7 +355,7 @@ export default function FeeScreen() {
 
       <ScrollView style={styles.content}>
 
-        {/* ── STUDENTS FEE STATUS ── */}
+        {/* STUDENTS */}
         {activeTab === 'Students' && (
           <View>
             {/* Summary */}
@@ -257,9 +406,7 @@ export default function FeeScreen() {
               <View style={styles.emptyBox}>
                 <BanknotesIcon size={40} color="#c4b5fd" />
                 <Text style={styles.emptyTxt}>
-                  {students.length === 0
-                    ? 'No students added yet'
-                    : 'No students match filter'}
+                  {students.length === 0 ? 'No students added yet' : 'No students match filter'}
                 </Text>
               </View>
             ) : (
@@ -278,48 +425,66 @@ export default function FeeScreen() {
                     </View>
                     <View style={styles.studentInfo}>
                       <Text style={styles.studentName}>{s.fullName || s.name}</Text>
-                      <Text style={styles.studentMeta}>{s.class} — {s.section} · {s.id}</Text>
-                      {s.feeStatus === 'paid' && (
-                        <Text style={styles.paidOn}>
-                          Paid {s.feeAmount > 0 ? `· PKR ${s.feeAmount.toLocaleString()}` : ''}
-                        </Text>
-                      )}
+                      <Text style={styles.studentMeta}>{s.class} — {s.section}</Text>
+                      <Text style={[styles.feeLbl, {
+                        color: s.feeType === 'full_scholarship' ? '#16a34a' :
+                               s.feeType && s.feeType !== 'standard' ? '#7c3aed' : '#6b7280'
+                      }]}>
+                        {getFeeLabel(s)}
+                      </Text>
                     </View>
                   </View>
-                  <TouchableOpacity
-                    style={[styles.statusBtn,
-                      s.feeStatus === 'paid' ? styles.statusBtnPaid : styles.statusBtnPending
-                    ]}
-                    onPress={() => s.feeStatus === 'paid' ? markUnpaid(s) : markPaid(s)}>
-                    {s.feeStatus === 'paid'
-                      ? <CheckCircleIcon size={14} color="#16a34a" />
-                      : <ClockIcon size={14} color="#ef4444" />}
-                    <Text style={[styles.statusBtnTxt,
-                      {color: s.feeStatus === 'paid' ? '#16a34a' : '#ef4444'}]}>
-                      {s.feeStatus === 'paid' ? 'Paid' : 'Pending'}
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={styles.studentActions}>
+                    {/* Fee type button */}
+                    <TouchableOpacity
+                      style={styles.feeTypeIcon}
+                      onPress={() => {
+                        setFeeModal(s);
+                        setFeeType(s.feeType || 'standard');
+                        setFeeDiscount(s.feeDiscount ? String(s.feeDiscount) : '');
+                      }}>
+                      <UserIcon size={14} color="#7c3aed" />
+                    </TouchableOpacity>
+
+                    {/* Paid/Pending button */}
+                    <TouchableOpacity
+                      style={[styles.statusBtn,
+                        s.feeStatus === 'paid' ? styles.statusBtnPaid : styles.statusBtnPending
+                      ]}
+                      onPress={() => s.feeStatus === 'paid' ? markUnpaid(s) : markPaid(s)}>
+                      {s.feeStatus === 'paid'
+                        ? <CheckCircleIcon size={14} color="#16a34a" />
+                        : <ClockIcon size={14} color="#ef4444" />}
+                      <Text style={[styles.statusBtnTxt,
+                        {color: s.feeStatus === 'paid' ? '#16a34a' : '#ef4444'}]}>
+                        {s.feeStatus === 'paid' ? 'Paid' : 'Pending'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))
             )}
 
-            {/* Refresh */}
             <TouchableOpacity style={styles.refreshBtn} onPress={loadStudents}>
               <Text style={styles.refreshTxt}>Refresh</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* ── FEE STRUCTURE ── */}
+        {/* STRUCTURE */}
         {activeTab === 'Structure' && (
           <View>
             <Text style={styles.sectionTitle}>Set Monthly Fee</Text>
+            <Text style={styles.sectionSub}>Set standard fee per class. Individual discounts can be set per student.</Text>
             {CLASS_HIERARCHY.map((cat, i) => (
               <View key={i} style={styles.card}>
                 <Text style={styles.catTitle}>{cat.category}</Text>
                 {cat.classes.map((cls, j) => (
                   <View key={j} style={styles.feeRow}>
                     <Text style={styles.className}>{cls}</Text>
+                    {feeStructure[cls] > 0 && (
+                      <Text style={styles.currentFee}>PKR {feeStructure[cls].toLocaleString()}</Text>
+                    )}
                     <View style={styles.feeInputRow}>
                       <Text style={styles.pkrLabel}>PKR</Text>
                       <TextInput
@@ -327,12 +492,12 @@ export default function FeeScreen() {
                         placeholder="0"
                         placeholderTextColor="#c4b5fd"
                         keyboardType="number-pad"
-                        value={feeStructure[cls] || ''}
-                        onChangeText={val => setFeeStructure(prev => ({...prev, [cls]: val}))}
+                        value={feeInputs[cls] || ''}
+                        onChangeText={val => setFeeInputs(prev => ({...prev, [cls]: val}))}
                       />
                       <TouchableOpacity
                         style={styles.saveBtn}
-                        onPress={() => saveFeeStructure(cls, feeStructure[cls] || '')}>
+                        onPress={() => saveFeeStructure(cls, feeInputs[cls] || '')}>
                         <Text style={styles.saveBtnTxt}>Save</Text>
                       </TouchableOpacity>
                     </View>
@@ -343,7 +508,7 @@ export default function FeeScreen() {
           </View>
         )}
 
-        {/* ── REPORTS ── */}
+        {/* REPORTS */}
         {activeTab === 'Reports' && (
           <View>
             <Text style={styles.sectionTitle}>Fee Report — {month}</Text>
@@ -366,6 +531,13 @@ export default function FeeScreen() {
               <View style={styles.reportRow}>
                 <Text style={styles.reportLbl}>Collection Rate</Text>
                 <Text style={[styles.reportVal, {color: '#7c3aed'}]}>{collectionRate}%</Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.reportRow}>
+                <Text style={styles.reportLbl}>Scholarships</Text>
+                <Text style={[styles.reportVal, {color: '#0891b2'}]}>
+                  {students.filter(s => s.feeType && s.feeType !== 'standard').length}
+                </Text>
               </View>
             </View>
 
@@ -423,26 +595,31 @@ const styles = StyleSheet.create({
   studentAv: {width: 38, height: 38, borderRadius: 19, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center'},
   studentAvTxt: {fontSize: 12, fontWeight: '700'},
   studentInfo: {flex: 1},
-  studentName: {fontSize: 14, fontWeight: '600', color: '#1e1b4b'},
+  studentName: {fontSize: 13, fontWeight: '600', color: '#1e1b4b'},
   studentMeta: {fontSize: 11, color: '#9ca3af', marginTop: 1},
-  paidOn: {fontSize: 11, color: '#16a34a', marginTop: 1, fontWeight: '500'},
+  feeLbl: {fontSize: 11, marginTop: 2, fontWeight: '500'},
+  studentActions: {flexDirection: 'column', alignItems: 'flex-end', gap: 6},
+  feeTypeIcon: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ede9fe',
+    alignItems: 'center', justifyContent: 'center',
+  },
   statusBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4,
   },
   statusBtnPaid: {backgroundColor: '#f0fdf4', borderColor: '#86efac'},
   statusBtnPending: {backgroundColor: '#fef2f2', borderColor: '#fca5a5'},
   statusBtnTxt: {fontSize: 11, fontWeight: '700'},
-  refreshBtn: {
-    backgroundColor: '#ffffff', borderRadius: 10, padding: 12,
-    alignItems: 'center', borderWidth: 1, borderColor: '#ede9fe', marginTop: 8,
-  },
+  refreshBtn: {backgroundColor: '#ffffff', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#ede9fe', marginTop: 8},
   refreshTxt: {fontSize: 13, fontWeight: '600', color: '#7c3aed'},
-  sectionTitle: {fontSize: 17, fontWeight: '700', color: '#1e1b4b', marginBottom: 10},
+  sectionTitle: {fontSize: 17, fontWeight: '700', color: '#1e1b4b', marginBottom: 4},
+  sectionSub: {fontSize: 12, color: '#9ca3af', marginBottom: 14},
   card: {backgroundColor: '#ffffff', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#ede9fe'},
   catTitle: {fontSize: 14, fontWeight: '700', color: '#1e1b4b', marginBottom: 10},
   feeRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6'},
   className: {fontSize: 13, fontWeight: '500', color: '#374151', flex: 1},
+  currentFee: {fontSize: 11, color: '#7c3aed', fontWeight: '600', marginRight: 8},
   feeInputRow: {flexDirection: 'row', alignItems: 'center', gap: 6},
   pkrLabel: {fontSize: 12, color: '#7c3aed', fontWeight: '600'},
   feeInput: {backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8, padding: 7, fontSize: 13, color: '#1e1b4b', width: 70, textAlign: 'center'},
@@ -458,4 +635,23 @@ const styles = StyleSheet.create({
   progressBar: {flex: 1, height: 6, backgroundColor: '#f3f4f6', borderRadius: 3, overflow: 'hidden'},
   progressFill: {height: '100%', backgroundColor: '#7c3aed', borderRadius: 3},
   progressPct: {fontSize: 12, fontWeight: '700', color: '#7c3aed', width: 35, textAlign: 'right'},
+  // MODAL
+  modalOverlay: {flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20},
+  modalBox: {backgroundColor: '#ffffff', borderRadius: 16, padding: 20, width: '100%', maxWidth: 360},
+  modalHeader: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8},
+  modalTitle: {fontSize: 16, fontWeight: '700', color: '#1e1b4b'},
+  modalStudent: {fontSize: 14, fontWeight: '600', color: '#1e1b4b', marginBottom: 2},
+  modalClass: {fontSize: 12, color: '#6b7280', marginBottom: 14},
+  modalLabel: {fontSize: 11, fontWeight: '600', color: '#7c3aed', letterSpacing: 1, marginBottom: 8},
+  modalValue: {fontSize: 12, color: '#1e1b4b', fontWeight: '600'},
+  feeTypeGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14},
+  feeTypeBtn: {borderWidth: 1, borderColor: '#ede9fe', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#ffffff'},
+  feeTypeBtnOn: {borderColor: '#7c3aed', backgroundColor: '#f5f3ff'},
+  feeTypeTxt: {fontSize: 12, fontWeight: '500', color: '#6b7280'},
+  feeTypeTxtOn: {color: '#7c3aed', fontWeight: '700'},
+  discountBox: {backgroundColor: '#f5f3ff', borderRadius: 10, padding: 12, marginBottom: 14},
+  discountInput: {backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#ede9fe', borderRadius: 8, padding: 10, fontSize: 14, color: '#1e1b4b', marginTop: 4},
+  discountHint: {fontSize: 12, color: '#7c3aed', fontWeight: '600', marginTop: 6},
+  modalSaveBtn: {backgroundColor: '#1e1b4b', borderRadius: 10, padding: 14, alignItems: 'center'},
+  modalSaveTxt: {color: '#ffffff', fontSize: 14, fontWeight: '700'},
 });

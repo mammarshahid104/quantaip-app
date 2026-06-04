@@ -37,6 +37,17 @@ const detectRole = (userId: string): string | null => {
   return null;
 };
 
+const formatId = (text: string): string => {
+  const clean = text.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  if (clean.length <= 3) return clean;
+  if (clean.length <= 6) return `${clean.slice(0,3)}-${clean.slice(3)}`;
+  if (clean.length <= 9) return `${clean.slice(0,3)}-${clean.slice(3,6)}-${clean.slice(6)}`;
+  const role = clean.slice(6, 9);
+  const isAdmin = role === 'ADM';
+  const maxDigits = isAdmin ? 3 : 4;
+  return `${clean.slice(0,3)}-${clean.slice(3,6)}-${clean.slice(6,9)}-${clean.slice(9, 9 + maxDigits)}`;
+};
+
 const ROLE_INFO: any = {
   admin:   {label: 'Admin',   color: '#7c3aed'},
   teacher: {label: 'Teacher', color: '#0891b2'},
@@ -136,10 +147,10 @@ function LoginScreen({navigation}: any) {
             <UserIcon size={18} color="#c4b5fd" />
             <TextInput
               style={styles.input}
-              placeholder="Enter your ID"
+              placeholder="e.g. GHS-001-STU-0001"
               placeholderTextColor="#c4b5fd"
               value={id}
-              onChangeText={setId}
+              onChangeText={(text) => setId(formatId(text))}
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -231,89 +242,45 @@ const styles = StyleSheet.create({
   scroll: {padding: 16, paddingBottom: 40},
   header: {alignItems: 'center', marginVertical: 24},
   lockIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: '#f5f3ff',
-    borderWidth: 1,
-    borderColor: '#ede9fe',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+    width: 56, height: 56, borderRadius: 16,
+    backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ede9fe',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
   headerEye: {fontSize: 10, letterSpacing: 4, color: '#7c3aed', fontWeight: '600', marginBottom: 8},
   headerTitle: {fontSize: 32, fontWeight: '700', color: '#1e1b4b', marginBottom: 6},
   headerAccent: {color: '#7c3aed'},
   headerSub: {fontSize: 14, color: '#6b7280'},
   roleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    marginBottom: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    padding: 12, borderRadius: 12, borderWidth: 1.5, marginBottom: 12,
   },
   roleBadgeTxt: {fontSize: 14, fontWeight: '700'},
   roleBadgeInvalid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fef2f2',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca',
+    borderRadius: 12, padding: 12, marginBottom: 12,
   },
   roleBadgeInvalidTxt: {fontSize: 13, color: '#ef4444', fontWeight: '600'},
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#ede9fe',
+    backgroundColor: '#ffffff', borderRadius: 16, padding: 16,
+    marginBottom: 14, borderWidth: 1, borderColor: '#ede9fe',
   },
   fieldLabel: {fontSize: 11, fontWeight: '600', color: '#7c3aed', letterSpacing: 2, marginBottom: 10},
   inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#f5f3ff',
-    borderWidth: 1.5,
-    borderColor: '#ede9fe',
-    borderRadius: 10,
-    paddingHorizontal: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#f5f3ff', borderWidth: 1.5, borderColor: '#ede9fe',
+    borderRadius: 10, paddingHorizontal: 12,
   },
-  input: {
-    flex: 1,
-    padding: 13,
-    fontSize: 14,
-    color: '#1e1b4b',
-    fontWeight: '500',
-  },
-  errorWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 4,
-  },
+  input: {flex: 1, padding: 13, fontSize: 14, color: '#1e1b4b', fontWeight: '500'},
+  errorWrap: {flexDirection: 'row', alignItems: 'center', marginTop: 10, marginBottom: 4},
   errorTxt: {fontSize: 13, color: '#ef4444', fontWeight: '500'},
-  loginBtn: {
-    borderRadius: 10,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 16,
-  },
+  loginBtn: {borderRadius: 10, padding: 15, alignItems: 'center', marginTop: 16},
   loginBtnDisabled: {backgroundColor: '#c4b5fd'},
   loginBtnInner: {flexDirection: 'row', alignItems: 'center', gap: 8},
   loginBtnTxt: {color: '#ffffff', fontSize: 15, fontWeight: '700'},
   footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    marginBottom: 10,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: 4, marginBottom: 10,
   },
   footerTxt: {fontSize: 11, color: '#a78bfa', fontWeight: '500'},
 });
