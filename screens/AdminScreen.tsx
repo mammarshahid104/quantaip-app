@@ -422,10 +422,12 @@ export default function AdminScreen({navigation}: any) {
             </View>
             {[
               {label: 'Student ID', value: credModal?.id},
-              {label: 'Password', value: credModal?.password || 'Not saved', highlight: true},
+              {label: 'Student Pass', value: credModal?.password || 'Not saved', highlight: true},
               {label: 'Class', value: `${credModal?.class} — ${credModal?.section}`},
+              {label: 'Roll No', value: credModal?.rollNo || 'N/A'},
               {label: 'Father', value: credModal?.fatherName || 'N/A'},
               {label: 'Parent ID', value: credModal?.parentId || 'N/A'},
+              {label: 'Parent Pass', value: credModal?.parentPassword || 'Not saved', highlight: true},
               {label: 'Phone', value: credModal?.parentPhone || 'N/A'},
             ].map((row, i) => (
               <View key={i} style={styles.modalRow}>
@@ -592,7 +594,25 @@ export default function AdminScreen({navigation}: any) {
                           {cls.students.map((s, si) => (
                             <TouchableOpacity key={si}
                               style={styles.studentCard}
-                              onPress={() => setCredModal(s)}>
+                              onPress={async () => {
+                                    try {
+                                   const parentId = s.parentId || '';
+                                    if (!parentId) {
+                                     setCredModal({...s, parentPassword: 'Not saved'});
+                                     return;
+                                    }
+                                   const parentDoc = await firestore()
+                                             .collection('schools').doc(SCHOOL_CODE)
+                                              .collection('parents').doc(parentId)
+                                            .get();
+                                            const parentPass = parentDoc.exists 
+                                        ? parentDoc.data()?.password || 'Not saved' 
+                                          : 'Not saved';
+                                        setCredModal({...s, parentPassword: parentPass});
+                                      } catch (e) {
+                                    setCredModal({...s, parentPassword: 'Not saved'});
+                                  }
+                                }}>
                               <View style={styles.studentCardLeft}>
                                 <View style={styles.studentAv}>
                                   <Text style={styles.studentAvTxt}>

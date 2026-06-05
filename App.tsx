@@ -14,12 +14,15 @@ import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {
   LockClosedIcon,
+  LockOpenIcon,
   UserIcon,
   AcademicCapIcon,
   UsersIcon,
   ShieldCheckIcon,
   ArrowRightIcon,
   ExclamationCircleIcon,
+  EyeIcon,
+  EyeSlashIcon,
 } from 'react-native-heroicons/outline';
 import AdminScreen from './screens/AdminScreen';
 import TeacherScreen from './screens/TeacherScreen';
@@ -68,6 +71,7 @@ function LoginScreen({navigation}: any) {
   const [pass, setPass] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPass, setShowPass] = useState(false);
 
   const detectedRole = detectRole(id);
 
@@ -142,6 +146,8 @@ function LoginScreen({navigation}: any) {
 
         {/* LOGIN FORM */}
         <View style={styles.card}>
+
+          {/* ID Field */}
           <Text style={styles.fieldLabel}>YOUR ID</Text>
           <View style={styles.inputWrap}>
             <UserIcon size={18} color="#c4b5fd" />
@@ -153,9 +159,13 @@ function LoginScreen({navigation}: any) {
               onChangeText={(text) => setId(formatId(text))}
               autoCapitalize="none"
               autoCorrect={false}
+              autoComplete="off"
+              keyboardType="visible-password"
+              spellCheck={false}
             />
           </View>
 
+          {/* Password Field */}
           <Text style={[styles.fieldLabel, {marginTop: 14}]}>PASSWORD</Text>
           <View style={styles.inputWrap}>
             <LockClosedIcon size={18} color="#c4b5fd" />
@@ -165,8 +175,17 @@ function LoginScreen({navigation}: any) {
               placeholderTextColor="#c4b5fd"
               value={pass}
               onChangeText={setPass}
-              secureTextEntry
+              secureTextEntry={!showPass}
+              autoCorrect={false}
+              autoComplete="off"
             />
+            <TouchableOpacity
+              onPress={() => setShowPass(!showPass)}
+              style={styles.eyeBtn}>
+              {showPass
+                ? <EyeSlashIcon size={20} color="#9ca3af" />
+                : <EyeIcon size={20} color="#9ca3af" />}
+            </TouchableOpacity>
           </View>
 
           {error ? (
@@ -272,6 +291,7 @@ const styles = StyleSheet.create({
     borderRadius: 10, paddingHorizontal: 12,
   },
   input: {flex: 1, padding: 13, fontSize: 14, color: '#1e1b4b', fontWeight: '500'},
+  eyeBtn: {padding: 4},
   errorWrap: {flexDirection: 'row', alignItems: 'center', marginTop: 10, marginBottom: 4},
   errorTxt: {fontSize: 13, color: '#ef4444', fontWeight: '500'},
   loginBtn: {borderRadius: 10, padding: 15, alignItems: 'center', marginTop: 16},
