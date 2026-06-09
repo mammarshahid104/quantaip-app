@@ -30,6 +30,8 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   KeyIcon,
+  PencilSquareIcon,
+  TrophyIcon,
 } from 'react-native-heroicons/outline';
 import ClassesScreen from './ClassesScreen';
 import FeeScreen from './FeeScreen';
@@ -42,6 +44,8 @@ const CLASS_HIERARCHY = [
   {category: 'Middle', classes: ['Grade 6', 'Grade 7', 'Grade 8']},
   {category: 'Secondary', classes: ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']},
 ];
+
+const ALL_CLASSES = CLASS_HIERARCHY.flatMap(c => c.classes);
 
 const generateId = (role: string, index: number): string => {
   const roleCode: any = {teacher: 'TCH', student: 'STU', parent: 'PAR'};
@@ -61,6 +65,7 @@ const TABS = [
   {key: 'Students', icon: UserGroupIcon},
   {key: 'Teachers', icon: AcademicCapIcon},
   {key: 'Fee', icon: BanknotesIcon},
+  {key: 'Results', icon: TrophyIcon},
   {key: 'Import', icon: ArrowUpTrayIcon},
 ];
 
@@ -82,7 +87,15 @@ export default function AdminScreen({navigation}: any) {
   const [teacherList, setTeacherList] = useState<any[]>([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
   const [teacherModal, setTeacherModal] = useState<any>(null);
+  const [editClassesModal, setEditClassesModal] = useState<any>(null);
+  const [savingClasses, setSavingClasses] = useState(false);
 
+  // Results states
+  const [resultTestType, setResultTestType] = useState('');
+  const [resultClass, setResultClass] = useState('');
+  const [generatingResult, setGeneratingResult] = useState(false);
+  const [resultPreview, setResultPreview] = useState<any[]>([]);
+  
   // Student sub tab
   const [studentTab, setStudentTab] = useState('List');
   const [teacherTab, setTeacherTab] = useState('List');
@@ -123,7 +136,7 @@ export default function AdminScreen({navigation}: any) {
     } catch (e) {}
   };
 
-    const loadStudents = async () => {
+  const loadStudents = async () => {
     setLoadingStudents(true);
     try {
       const snap = await firestore()
@@ -160,6 +173,160 @@ export default function AdminScreen({navigation}: any) {
       prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
     );
   };
+
+  const toggleClassForTeacher = (cls: string) => {
+    if (!editClassesModal) return;
+    const current = editClassesModal.classesAssigned || [];
+    const updated = current.includes(cls)
+      ? current.filter((c: string) => c !== cls)
+      : [...current, cls];
+    setEditClassesModal({...editClassesModal, classesAssigned: updated});
+  };
+
+  const saveTeacherClasses = async () => {
+    if (!editClassesModal) return;
+    setSavingClasses(true);
+    try {
+      await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('teachers').doc(editClassesModal.id)
+        .update({
+          classesAssigned: editClassesModal.classesAssigned || [],
+        });
+
+      // Update local list
+      setTeacherList(prev => prev.map(t =>
+        t.id === editClassesModal.id
+          ? {...t, classesAssigned: editClassesModal.classesAssigned}
+          : t
+      ));
+
+      Alert.alert('✅ Saved!', `Classes updated for ${editClassesModal.name}`);
+      setEditClassesModal(null);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSavingClasses(false);
+    }
+  };
+  
+  const generateResult = async () => {
+  if (!resultTestType || !resultClass) {
+    Alert.alert('Error', 'Please select test type and class');
+    return;
+  }
+  setGeneratingResult(true);
+  try {
+    // Get all marks for this test type and class
+    const marksSnap = await firestore()
+      .collection('schools').doc(SCHOOL_CODE)
+      .collection('marks')
+      .where('type', '==', resultTestType)
+      .where('class', '==', resultClass)
+      .get();
+
+    if (marksSnap.empty) {
+      Alert.alert('No Data', 'No marks found for this test type and class!');
+      setGeneratingResult(false);
+      return;
+    }
+
+    // Get all students in this class
+    const studentsSnap = await firestore()
+      .collection('schools').doc(SCHOOL_CODE)
+      .collection('students')
+      .where('class', '==', resultClass)
+      .get();
+
+    const studentList = studentsSnap.docs.map(d => d.data());
+
+    // For each student — compile all subject marks
+    const studentResults: any[] = [];
+
+    for (const student of studentList) {
+      let totalObtained = 0;
+      let totalMarks = 0;
+      const subjects: any = {};
+
+      for (const testDoc of marksSnap.docs) {
+        const testData = testDoc.data();
+        const studentMarkDoc = await firestore()
+          .collection('schools').doc(SCHOOL_CODE)
+          .collection('marks').doc(testDoc.id)
+          .collection('students').doc(student.id)
+          .get();
+
+        if (studentMarkDoc.exists) {
+          const markData = studentMarkDoc.data();
+          subjects[testData.subject] = {
+            obtained: markData?.obtained || 0,
+            total: testData.totalMarks,
+            percentage: markData?.percentage || 0,
+            grade: markData?.grade || 'F',
+          };
+          totalObtained += markData?.obtained || 0;
+          totalMarks += testData.totalMarks;
+        }
+      }
+
+      if (Object.keys(subjects).length > 0) {
+        const percentage = totalMarks > 0 ? Math.round((totalObtained / totalMarks) * 100) : 0;
+        const grade = percentage >= 90 ? 'A+' : percentage >= 80 ? 'A' :
+          percentage >= 70 ? 'B+' : percentage >= 60 ? 'B' :
+          percentage >= 50 ? 'C' : 'F';
+
+        studentResults.push({
+          studentId: student.id,
+          name: student.fullName || student.name,
+          rollNo: student.rollNo,
+          class: resultClass,
+          section: student.section,
+          subjects,
+          totalObtained,
+          totalMarks,
+          percentage,
+          grade,
+        });
+      }
+    }
+
+    // Sort by percentage — assign positions
+    studentResults.sort((a, b) => b.percentage - a.percentage);
+    studentResults.forEach((s, i) => {s.position = i + 1;});
+
+    // Save to Firestore
+    const resultId = `${resultTestType}_${resultClass.replace(/\s+/g, '')}_${new Date().toISOString().split('T')[0]}`;
+    const batch = firestore().batch();
+
+    studentResults.forEach(s => {
+      const ref = firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('results').doc(resultId)
+        .collection('students').doc(s.studentId);
+      batch.set(ref, {...s, generatedAt: firestore.FieldValue.serverTimestamp()});
+    });
+
+    // Save result metadata
+    const resultRef = firestore()
+      .collection('schools').doc(SCHOOL_CODE)
+      .collection('results').doc(resultId);
+    batch.set(resultRef, {
+      id: resultId,
+      testType: resultTestType,
+      class: resultClass,
+      totalStudents: studentResults.length,
+      generatedAt: firestore.FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+    setResultPreview(studentResults);
+    Alert.alert('✅ Result Generated!', `${studentResults.length} students ranked for ${resultClass}!`);
+  } catch (e: any) {
+    Alert.alert('Error', e.message);
+  } finally {
+    setGeneratingResult(false);
+  }
+};
 
   const addStudent = async () => {
     if (!sName || !selectedClass || !sSection) {
@@ -249,8 +416,7 @@ export default function AdminScreen({navigation}: any) {
         `${teacherId.toLowerCase()}@quantaip.edu.pk`, defaultPass);
 
       setStats(prev => ({...prev, teachers: prev.teachers + 1}));
-      Alert.alert('Teacher Added ✅',
-        `ID: ${teacherId}\nPassword: ${defaultPass}`);
+      Alert.alert('Teacher Added ✅', `ID: ${teacherId}\nPassword: ${defaultPass}`);
 
       setTName(''); setTSubject(''); setTPhone(''); setTClasses('');
       loadTeachers();
@@ -393,7 +559,6 @@ export default function AdminScreen({navigation}: any) {
     }
   };
 
-  // Group students by category
   const filteredStudents = studentList.filter(s =>
     (s.fullName || s.name || '').toLowerCase().includes(studentSearch.toLowerCase()) ||
     (s.id || '').toLowerCase().includes(studentSearch.toLowerCase())
@@ -444,7 +609,7 @@ export default function AdminScreen({navigation}: any) {
         </View>
       </Modal>
 
-      {/* TEACHER MODAL */}
+      {/* TEACHER CREDENTIALS MODAL */}
       <Modal visible={!!teacherModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -459,17 +624,82 @@ export default function AdminScreen({navigation}: any) {
               {label: 'Password', value: teacherModal?.password || 'Not saved', highlight: true},
               {label: 'Subject', value: teacherModal?.subject},
               {label: 'Phone', value: teacherModal?.phone || 'N/A'},
-              {label: 'Classes', value: teacherModal?.classesAssigned?.join(', ') || 'N/A'},
+              {label: 'Classes', value: teacherModal?.classesAssigned?.join(', ') || 'None'},
             ].map((row, i) => (
               <View key={i} style={styles.modalRow}>
                 <Text style={styles.modalLabel}>{row.label}</Text>
-                <Text style={[styles.modalValue, row.highlight && styles.modalHighlight]}>
+                <Text style={[styles.modalValue, (row as any).highlight && styles.modalHighlight]}>
                   {row.value}
                 </Text>
               </View>
             ))}
+            <TouchableOpacity
+              style={[styles.modalCloseBtn, {backgroundColor: '#7c3aed', marginBottom: 8}]}
+              onPress={() => {
+                setEditClassesModal({...teacherModal});
+                setTeacherModal(null);
+              }}>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                <PencilSquareIcon size={16} color="#ffffff" />
+                <Text style={styles.modalCloseTxt}>Edit Classes</Text>
+              </View>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setTeacherModal(null)}>
               <Text style={styles.modalCloseTxt}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* EDIT CLASSES MODAL */}
+      <Modal visible={!!editClassesModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, {maxHeight: '80%'}]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Assign Classes</Text>
+              <TouchableOpacity onPress={() => setEditClassesModal(null)}>
+                <XMarkIcon size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSub}>{editClassesModal?.name}</Text>
+
+            <ScrollView style={{maxHeight: 350}}>
+              {CLASS_HIERARCHY.map((cat, ci) => (
+                <View key={ci} style={{marginBottom: 12}}>
+                  <Text style={styles.classCatTitle}>{cat.category}</Text>
+                  <View style={styles.classChipGrid}>
+                    {cat.classes.map((cls, cj) => {
+                      const isSelected = (editClassesModal?.classesAssigned || []).includes(cls);
+                      return (
+                        <TouchableOpacity key={cj}
+                          style={[styles.classChip, isSelected && styles.classChipOn]}
+                          onPress={() => toggleClassForTeacher(cls)}>
+                          <Text style={[styles.classChipTxt, isSelected && styles.classChipTxtOn]}>
+                            {cls}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            <View style={styles.selectedCount}>
+              <Text style={styles.selectedCountTxt}>
+                {(editClassesModal?.classesAssigned || []).length} classes selected
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.modalCloseBtn, {backgroundColor: '#16a34a', marginBottom: 8}]}
+              onPress={saveTeacherClasses}
+              disabled={savingClasses}>
+              {savingClasses ? <ActivityIndicator color="#ffffff" /> :
+                <Text style={styles.modalCloseTxt}>Save Classes ✅</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setEditClassesModal(null)}>
+              <Text style={styles.modalCloseTxt}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -595,24 +825,24 @@ export default function AdminScreen({navigation}: any) {
                             <TouchableOpacity key={si}
                               style={styles.studentCard}
                               onPress={async () => {
-                                    try {
-                                   const parentId = s.parentId || '';
-                                    if (!parentId) {
-                                     setCredModal({...s, parentPassword: 'Not saved'});
-                                     return;
-                                    }
-                                   const parentDoc = await firestore()
-                                             .collection('schools').doc(SCHOOL_CODE)
-                                              .collection('parents').doc(parentId)
-                                            .get();
-                                            const parentPass = parentDoc.exists 
-                                        ? parentDoc.data()?.password || 'Not saved' 
-                                          : 'Not saved';
-                                        setCredModal({...s, parentPassword: parentPass});
-                                      } catch (e) {
+                                try {
+                                  const parentId = s.parentId || '';
+                                  if (!parentId) {
                                     setCredModal({...s, parentPassword: 'Not saved'});
+                                    return;
                                   }
-                                }}>
+                                  const parentDoc = await firestore()
+                                    .collection('schools').doc(SCHOOL_CODE)
+                                    .collection('parents').doc(parentId)
+                                    .get();
+                                  const parentPass = parentDoc.exists
+                                    ? parentDoc.data()?.password || 'Not saved'
+                                    : 'Not saved';
+                                  setCredModal({...s, parentPassword: parentPass});
+                                } catch (e) {
+                                  setCredModal({...s, parentPassword: 'Not saved'});
+                                }
+                              }}>
                               <View style={styles.studentCardLeft}>
                                 <View style={styles.studentAv}>
                                   <Text style={styles.studentAvTxt}>
@@ -724,11 +954,20 @@ export default function AdminScreen({navigation}: any) {
                           <Text style={styles.studentName}>{t.name}</Text>
                           <Text style={styles.studentMeta}>{t.subject} · {t.id}</Text>
                           {t.classesAssigned?.length > 0 && (
-                            <Text style={styles.studentMeta}>Classes: {t.classesAssigned.join(', ')}</Text>
+                            <Text style={styles.studentMeta}>
+                              {t.classesAssigned.length} class{t.classesAssigned.length > 1 ? 'es' : ''} assigned
+                            </Text>
                           )}
                         </View>
                       </View>
-                      <KeyIcon size={16} color="#c4b5fd" />
+                      <View style={styles.teacherActions}>
+                        <TouchableOpacity
+                          style={styles.editClassesBtn}
+                          onPress={() => setEditClassesModal({...t})}>
+                          <PencilSquareIcon size={16} color="#7c3aed" />
+                        </TouchableOpacity>
+                        <KeyIcon size={16} color="#c4b5fd" />
+                      </View>
                     </TouchableOpacity>
                   ))
                 )}
@@ -755,14 +994,14 @@ export default function AdminScreen({navigation}: any) {
                     </View>
                   ))}
                   <View style={{marginTop: 12}}>
-                    <Text style={styles.fieldLabel}>CLASSES ASSIGNED</Text>
+                    <Text style={styles.fieldLabel}>CLASSES ASSIGNED (optional)</Text>
                     <TextInput style={styles.input}
-                      placeholder="e.g. Grade 9, Grade 10, Grade 11"
+                      placeholder="e.g. Grade 9, Grade 10"
                       placeholderTextColor="#c4b5fd"
                       value={tClasses}
                       onChangeText={setTClasses}
                     />
-                    <Text style={styles.inputHint}>Separate multiple classes with commas</Text>
+                    <Text style={styles.inputHint}>You can also assign classes later from teacher list</Text>
                   </View>
                   <TouchableOpacity style={[styles.addBtn, {backgroundColor: '#0891b2'}]}
                     onPress={addTeacher} disabled={loading}>
@@ -777,6 +1016,120 @@ export default function AdminScreen({navigation}: any) {
             )}
           </View>
         )}
+        {/* RESULTS */}
+{tab === 'Results' && (
+  <View>
+    <Text style={styles.sectionTitle}>Generate Result</Text>
+
+    {/* Test Type */}
+    <Text style={styles.fieldLabel}>TEST TYPE</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
+      {[
+        {key: 'weekly', label: 'Weekly'},
+        {key: 'monthly', label: 'Monthly'},
+        {key: 'midterm', label: 'Mid Term'},
+        {key: 'sendup', label: 'Send Up'},
+        {key: 'final', label: 'Final'},
+      ].map((t, i) => (
+        <TouchableOpacity key={i}
+          style={[styles.clsChip, resultTestType === t.key && styles.clsChipOn]}
+          onPress={() => setResultTestType(t.key)}>
+          <Text style={[styles.clsChipTxt, resultTestType === t.key && styles.clsChipTxtOn]}>
+            {t.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+
+    {/* Class */}
+    <Text style={styles.fieldLabel}>CLASS</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 16}}>
+      {CLASS_HIERARCHY.flatMap(c => c.classes).map((cls, i) => (
+        <TouchableOpacity key={i}
+          style={[styles.clsChip, resultClass === cls && styles.clsChipOn]}
+          onPress={() => setResultClass(cls)}>
+          <Text style={[styles.clsChipTxt, resultClass === cls && styles.clsChipTxtOn]}>{cls}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+
+    <TouchableOpacity
+      style={[styles.addBtn, (!resultTestType || !resultClass) && styles.addBtnDisabled]}
+      disabled={!resultTestType || !resultClass || generatingResult}
+      onPress={generateResult}>
+      {generatingResult ? <ActivityIndicator color="#ffffff" /> :
+        <View style={styles.btnInner}>
+          <TrophyIcon size={18} color="#ffffff" />
+          <Text style={styles.addBtnTxt}>Generate Result</Text>
+        </View>}
+    </TouchableOpacity>
+
+    {/* Result Preview */}
+    {resultPreview.length > 0 && (
+      <View style={{marginTop: 16}}>
+        <Text style={styles.sectionTitle}>
+          Result — {resultClass}
+        </Text>
+        {resultPreview.map((s, i) => (
+          <View key={i} style={[styles.card, {marginBottom: 8}]}>
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
+                <View style={[styles.studentAv, {
+                  backgroundColor: s.position <= 3 ? '#fffbeb' : '#f5f3ff',
+                  borderColor: s.position <= 3 ? '#f59e0b' : '#7c3aed',
+                }]}>
+                  <Text style={[styles.studentAvTxt, {
+                    color: s.position <= 3 ? '#f59e0b' : '#7c3aed',
+                  }]}>
+                    #{s.position}
+                  </Text>
+                </View>
+                <View>
+                  <Text style={styles.studentName}>{s.name}</Text>
+                  <Text style={styles.studentMeta}>Roll {s.rollNo} · {s.percentage}%</Text>
+                </View>
+              </View>
+              <View style={{
+                backgroundColor: s.grade === 'A+' ? '#f0fdf4' : s.grade === 'F' ? '#fef2f2' : '#f5f3ff',
+                borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+                borderWidth: 1,
+                borderColor: s.grade === 'A+' ? '#86efac' : s.grade === 'F' ? '#fca5a5' : '#c4b5fd',
+              }}>
+                <Text style={{
+                  fontSize: 14, fontWeight: '700',
+                  color: s.grade === 'A+' ? '#16a34a' : s.grade === 'F' ? '#ef4444' : '#7c3aed',
+                }}>{s.grade}</Text>
+              </View>
+            </View>
+
+            {/* Subject breakdown */}
+            {Object.keys(s.subjects).map((subj, si) => (
+              <View key={si} style={{
+                flexDirection: 'row', justifyContent: 'space-between',
+                paddingVertical: 4, borderTopWidth: 1, borderTopColor: '#f3f4f6',
+              }}>
+                <Text style={{fontSize: 12, color: '#6b7280'}}>{subj}</Text>
+                <Text style={{fontSize: 12, fontWeight: '600', color: '#1e1b4b'}}>
+                  {s.subjects[subj].obtained}/{s.subjects[subj].total} · {s.subjects[subj].grade}
+                </Text>
+              </View>
+            ))}
+
+            <View style={{
+              flexDirection: 'row', justifyContent: 'space-between',
+              marginTop: 8, paddingTop: 8, borderTopWidth: 1.5, borderTopColor: '#ede9fe',
+            }}>
+              <Text style={{fontSize: 13, fontWeight: '700', color: '#1e1b4b'}}>Total</Text>
+              <Text style={{fontSize: 13, fontWeight: '700', color: '#7c3aed'}}>
+                {s.totalObtained}/{s.totalMarks} ({s.percentage}%)
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    )}
+  </View>
+)}
 
         {/* FEE */}
         {tab === 'Fee' && <FeeScreen />}
@@ -884,8 +1237,7 @@ const styles = StyleSheet.create({
   classBlock: {marginLeft: 12, marginBottom: 6},
   classBlockTitle: {
     fontSize: 12, fontWeight: '700', color: '#6b7280',
-    letterSpacing: 1, textTransform: 'uppercase',
-    marginBottom: 6, marginTop: 4,
+    letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, marginTop: 4,
   },
   studentCard: {
     backgroundColor: '#ffffff', borderRadius: 10, padding: 12,
@@ -901,6 +1253,12 @@ const styles = StyleSheet.create({
   studentAvTxt: {fontSize: 11, fontWeight: '700', color: '#7c3aed'},
   studentName: {fontSize: 13, fontWeight: '600', color: '#1e1b4b'},
   studentMeta: {fontSize: 11, color: '#9ca3af', marginTop: 1},
+  teacherActions: {flexDirection: 'row', alignItems: 'center', gap: 10},
+  editClassesBtn: {
+    width: 32, height: 32, borderRadius: 8,
+    backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ede9fe',
+    alignItems: 'center', justifyContent: 'center',
+  },
   sectionTitle: {fontSize: 17, fontWeight: '700', color: '#1e1b4b', marginBottom: 10},
   fieldLabel: {fontSize: 11, fontWeight: '600', color: '#7c3aed', letterSpacing: 2, marginBottom: 8},
   clsChip: {borderWidth: 1, borderColor: '#ede9fe', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: '#ffffff', marginRight: 6},
@@ -925,31 +1283,23 @@ const styles = StyleSheet.create({
   excelCol: {fontSize: 12, color: '#6b7280', marginBottom: 4, lineHeight: 18},
   progressBox: {flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0fdf4', borderRadius: 10, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#bbf7d0'},
   progressTxt: {fontSize: 13, color: '#16a34a', fontWeight: '600', flex: 1},
-  // MODAL
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center', justifyContent: 'center', padding: 20,
-  },
-  modalBox: {
-    backgroundColor: '#ffffff', borderRadius: 16, padding: 20,
-    width: '100%', maxWidth: 360,
-  },
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 16,
-  },
+  modalOverlay: {flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20},
+  modalBox: {backgroundColor: '#ffffff', borderRadius: 16, padding: 20, width: '100%', maxWidth: 360},
+  modalHeader: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16},
   modalTitle: {fontSize: 16, fontWeight: '700', color: '#1e1b4b'},
-  modalRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', paddingVertical: 8,
-    borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
-  },
+  modalSub: {fontSize: 12, color: '#9ca3af', marginBottom: 14},
+  modalRow: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6'},
   modalLabel: {fontSize: 12, color: '#6b7280', fontWeight: '500'},
   modalValue: {fontSize: 12, color: '#1e1b4b', fontWeight: '600', flex: 1, textAlign: 'right'},
   modalHighlight: {color: '#7c3aed', fontSize: 14},
-  modalCloseBtn: {
-    backgroundColor: '#1e1b4b', borderRadius: 10,
-    padding: 12, alignItems: 'center', marginTop: 16,
-  },
+  modalCloseBtn: {backgroundColor: '#1e1b4b', borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 8},
   modalCloseTxt: {color: '#ffffff', fontSize: 14, fontWeight: '700'},
+  classCatTitle: {fontSize: 12, fontWeight: '700', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8},
+  classChipGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 8},
+  classChip: {borderWidth: 1, borderColor: '#ede9fe', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#ffffff'},
+  classChipOn: {borderColor: '#7c3aed', backgroundColor: '#f5f3ff'},
+  classChipTxt: {fontSize: 12, fontWeight: '500', color: '#6b7280'},
+  classChipTxtOn: {color: '#7c3aed', fontWeight: '700'},
+  selectedCount: {backgroundColor: '#f5f3ff', borderRadius: 8, padding: 10, marginTop: 8, marginBottom: 8, alignItems: 'center'},
+  selectedCountTxt: {fontSize: 13, color: '#7c3aed', fontWeight: '600'},
 });

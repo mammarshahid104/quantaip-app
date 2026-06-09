@@ -19,83 +19,149 @@ import {
   XCircleIcon,
   ArrowRightOnRectangleIcon,
   BookOpenIcon,
+  TrophyIcon,
 } from 'react-native-heroicons/outline';
 
 const SCHOOL_CODE = 'GHS-001';
-
 const TABS = ['Overview', 'Attendance', 'Grades', 'Timetable'];
+
+const TEST_TYPE_ORDER = ['weekly', 'monthly', 'midterm', 'sendup', 'final', 'classtest'];
+const TEST_TYPE_LABELS: any = {
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  midterm: 'Mid Term',
+  sendup: 'Send Up',
+  final: 'Final',
+  classtest: 'Class Test',
+};
 
 export default function StudentScreen({navigation}: any) {
   const [tab, setTab] = useState('Overview');
   const [student, setStudent] = useState<any>(null);
   const [attendance, setAttendance] = useState<any[]>([]);
+  const [marks, setMarks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMarks, setLoadingMarks] = useState(false);
 
   const today = new Date().toLocaleDateString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
   });
 
   useEffect(() => {
-    const loadStudent = async () => {
-      try {
-        const user = auth().currentUser;
-        if (!user) return;
-        const id = user.email?.split('@')[0].toUpperCase();
-        const doc = await firestore()
-          .collection('schools').doc(SCHOOL_CODE)
-          .collection('students').doc(id)
-          .get();
-        if (doc.exists) {
-          setStudent(doc.data());
-        }
-      } catch (e) {
-      } finally {
-        setLoading(false);
-      }
-    };
     loadStudent();
   }, []);
 
-  useEffect(() => {
-    if (!student) return;
-    const loadAttendance = async () => {
-      try {
-        const snapshot = await firestore()
-          .collection('schools').doc(SCHOOL_CODE)
-          .collection('attendance')
-          .get();
+  const loadStudent = async () => {
+    try {
+      const user = auth().currentUser;
+      if (!user) return;
+      const id = user.email?.split('@')[0].toUpperCase();
+      const doc = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('students').doc(id)
+        .get();
+      if (doc.exists) {
+        setStudent(doc.data());
+        loadAttendance(doc.data());
+      }
+    } catch (e) {
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        const records: any[] = [];
-        for (const dateDoc of snapshot.docs) {
-          const classSnap = await firestore()
-            .collection('schools').doc(SCHOOL_CODE)
-            .collection('attendance').doc(dateDoc.id)
-            .collection(student.class).doc(student.id)
-            .get();
-          if (classSnap.exists) {
-            records.push({date: dateDoc.id, ...classSnap.data()});
-          }
+  const loadAttendance = async (studentData: any) => {
+    try {
+      const snapshot = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('attendance').get();
+
+      const records: any[] = [];
+      for (const dateDoc of snapshot.docs) {
+        const attDoc = await firestore()
+          .collection('schools').doc(SCHOOL_CODE)
+          .collection('attendance').doc(dateDoc.id)
+          .collection(studentData?.class).doc(studentData?.id)
+          .get();
+        if (attDoc.exists) {
+          records.push({date: dateDoc.id, ...attDoc.data()});
         }
-        setAttendance(records.sort((a, b) => b.date.localeCompare(a.date)));
-      } catch (e) {}
-    };
-    loadAttendance();
-  }, [student]);
+      }
+      setAttendance(records.sort((a, b) => b.date.localeCompare(a.date)));
+    } catch (e) {}
+  };
+
+  const loadMarks = async () => {
+  if (!student) return;
+  setLoadingMarks(true);
+  try {
+    const testsSnap = await firestore()
+      .collection('schools').doc(SCHOOL_CODE)
+      .collection('marks')
+      .get();
+
+    const allMarks: any[] = [];
+
+    for (const testDoc of testsSnap.docs) {
+      const testData = testDoc.data();
+      
+      // Sirf is student ki class ka test
+      if (testData.class !== student.class) continue;
+
+      const studentMarkDoc = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('marks').doc(testDoc.id)
+        .collection('students').doc(student.id)
+        .get();
+
+      if (studentMarkDoc.exists) {
+        allMarks.push({
+          ...testData,
+          ...studentMarkDoc.data(),
+        });
+      }
+    }
+
+    setMarks(allMarks.sort((a, b) => b.date?.localeCompare(a.date)));
+  } catch (e) {
+    console.log('Marks error:', e);
+  } finally {
+    setLoadingMarks(false);
+  }
+};
+
+  useEffect(() => {
+    if (tab === 'Grades' && student) {
+      loadMarks();
+    }
+  }, [tab, student]);
+
+  // Group marks by subject
+  const marksBySubject = marks.reduce((acc: any, m) => {
+    const subj = m.subject || 'Unknown';
+    if (!acc[subj]) acc[subj] = [];
+    acc[subj].push(m);
+    return acc;
+  }, {});
+
+  // Calculate overall average
+  const allPercentages = marks.map(m => m.percentage || 0);
+  const overallAvg = allPercentages.length > 0
+    ? Math.round(allPercentages.reduce((a, b) => a + b, 0) / allPercentages.length)
+    : 0;
+
+  const overallGrade = overallAvg >= 90 ? 'A+' : overallAvg >= 80 ? 'A' :
+    overallAvg >= 70 ? 'B+' : overallAvg >= 60 ? 'B' :
+    overallAvg >= 50 ? 'C' : overallAvg > 0 ? 'F' : '-';
+
+  const gradeColor = (pct: number) =>
+    pct >= 80 ? '#16a34a' : pct >= 60 ? '#7c3aed' : pct >= 40 ? '#f59e0b' : '#ef4444';
 
   const present = attendance.filter(a => a.status === 'P').length;
   const absent = attendance.filter(a => a.status === 'A').length;
   const late = attendance.filter(a => a.status === 'L').length;
   const total = attendance.length;
   const attendancePct = total > 0 ? Math.round((present / total) * 100) : 0;
-
-  const GRADES = [
-    {subject: 'Mathematics', score: 88, total: 100},
-    {subject: 'English', score: 91, total: 100},
-    {subject: 'Physics', score: 76, total: 100},
-    {subject: 'Urdu', score: 84, total: 100},
-    {subject: 'Pak Studies', score: 61, total: 100},
-    {subject: 'Biology', score: 79, total: 100},
-  ];
 
   const TIMETABLE = [
     {time: '08:00', subject: 'Mathematics', teacher: 'Mr. Qaiser', room: 'Rm 12'},
@@ -107,19 +173,6 @@ export default function StudentScreen({navigation}: any) {
     {time: '12:00', subject: 'Lunch', teacher: '', room: ''},
     {time: '12:45', subject: 'Pak Studies', teacher: 'Mr. Bilal', room: 'Rm 5'},
   ];
-
-  const gradeColor = (s: number) =>
-    s >= 85 ? '#16a34a' : s >= 70 ? '#7c3aed' : s >= 55 ? '#f59e0b' : '#ef4444';
-
-  const gradeLabel = (s: number) =>
-    s >= 90 ? 'A+' : s >= 80 ? 'A' : s >= 70 ? 'B+' : s >= 60 ? 'B' : 'C';
-
-  const statusIcon = (status: string) => {
-    if (status === 'P') return <CheckCircleIcon size={16} color="#16a34a" />;
-    if (status === 'A') return <XCircleIcon size={16} color="#ef4444" />;
-    if (status === 'L') return <ClockIcon size={16} color="#f59e0b" />;
-    return null;
-  };
 
   if (loading) {
     return (
@@ -139,8 +192,7 @@ export default function StudentScreen({navigation}: any) {
           <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
           <Text style={styles.navSub}>STUDENT PORTAL</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
+        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>
@@ -186,26 +238,24 @@ export default function StudentScreen({navigation}: any) {
         {/* OVERVIEW */}
         {tab === 'Overview' && (
           <View>
-            {/* Stats */}
             <View style={styles.statsRow}>
               <View style={[styles.statCard, {backgroundColor: '#f0fdf4', borderColor: '#bbf7d0'}]}>
-                <CheckCircleIcon size={20} color="#16a34a" />
+                <CheckCircleIcon size={18} color="#16a34a" />
                 <Text style={[styles.statVal, {color: '#16a34a'}]}>{present}</Text>
                 <Text style={styles.statLbl}>Present</Text>
               </View>
               <View style={[styles.statCard, {backgroundColor: '#fef2f2', borderColor: '#fecaca'}]}>
-                <XCircleIcon size={20} color="#ef4444" />
+                <XCircleIcon size={18} color="#ef4444" />
                 <Text style={[styles.statVal, {color: '#ef4444'}]}>{absent}</Text>
                 <Text style={styles.statLbl}>Absent</Text>
               </View>
-              <View style={[styles.statCard, {backgroundColor: '#fffbeb', borderColor: '#fde68a'}]}>
-                <ClockIcon size={20} color="#f59e0b" />
-                <Text style={[styles.statVal, {color: '#f59e0b'}]}>{late}</Text>
-                <Text style={styles.statLbl}>Late</Text>
+              <View style={[styles.statCard, {backgroundColor: '#f5f3ff', borderColor: '#ddd6fe'}]}>
+                <TrophyIcon size={18} color="#7c3aed" />
+                <Text style={[styles.statVal, {color: '#7c3aed'}]}>{overallGrade}</Text>
+                <Text style={styles.statLbl}>Grade</Text>
               </View>
             </View>
 
-            {/* Profile card */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Profile</Text>
               {[
@@ -217,7 +267,7 @@ export default function StudentScreen({navigation}: any) {
                 {label: 'School', value: student?.school, icon: BookOpenIcon},
               ].map((item, i) => (
                 <View key={i} style={styles.profileRow}>
-                  <item.icon size={15} color="#7c3aed" />
+                  <item.icon size={14} color="#7c3aed" />
                   <Text style={styles.profileLabel}>{item.label}</Text>
                   <Text style={styles.profileValue}>{item.value}</Text>
                 </View>
@@ -238,6 +288,11 @@ export default function StudentScreen({navigation}: any) {
                   backgroundColor: attendancePct >= 75 ? '#16a34a' : '#ef4444',
                 }]} />
               </View>
+              <View style={styles.attStats}>
+                <Text style={styles.attStat}>✅ {present} Present</Text>
+                <Text style={styles.attStat}>❌ {absent} Absent</Text>
+                <Text style={styles.attStat}>⏰ {late} Late</Text>
+              </View>
             </View>
 
             {attendance.length === 0 ? (
@@ -252,16 +307,13 @@ export default function StudentScreen({navigation}: any) {
                     <Text style={styles.attDate}>{a.date}</Text>
                   </View>
                   <Text style={styles.attClass}>{a.class}</Text>
-                  <View style={styles.attStatus}>
-                    {statusIcon(a.status)}
-                    <Text style={[styles.attStatusTxt,
-                      a.status === 'P' && {color: '#16a34a'},
-                      a.status === 'A' && {color: '#ef4444'},
-                      a.status === 'L' && {color: '#f59e0b'},
-                    ]}>
-                      {a.status === 'P' ? 'Present' : a.status === 'A' ? 'Absent' : 'Late'}
-                    </Text>
-                  </View>
+                  <Text style={[styles.attStatusTxt,
+                    a.status === 'P' && {color: '#16a34a'},
+                    a.status === 'A' && {color: '#ef4444'},
+                    a.status === 'L' && {color: '#f59e0b'},
+                  ]}>
+                    {a.status === 'P' ? '✅ Present' : a.status === 'A' ? '❌ Absent' : '⏰ Late'}
+                  </Text>
                 </View>
               ))
             )}
@@ -271,40 +323,80 @@ export default function StudentScreen({navigation}: any) {
         {/* GRADES */}
         {tab === 'Grades' && (
           <View>
+            {/* Overall banner */}
             <View style={styles.gpaBanner}>
               <View>
-                <Text style={styles.gpaEye}>OVERALL AVERAGE</Text>
-                <Text style={styles.gpaVal}>79.8%</Text>
-                <Text style={styles.gpaGrade}>Grade B+</Text>
+                <Text style={styles.gpaEye}>OVERALL PERFORMANCE</Text>
+                <Text style={styles.gpaVal}>{overallAvg}%</Text>
+                <Text style={styles.gpaGrade}>Grade {overallGrade}</Text>
               </View>
               <View style={styles.rankBox}>
-                <Text style={styles.rankVal}>4th</Text>
-                <Text style={styles.rankLbl}>Class Rank</Text>
+                <TrophyIcon size={24} color="#a78bfa" />
+                <Text style={styles.rankVal}>{marks.length}</Text>
+                <Text style={styles.rankLbl}>Tests</Text>
               </View>
             </View>
 
-            {GRADES.map((g, i) => {
-              const pct = g.score / g.total * 100;
-              const col = gradeColor(g.score);
-              return (
-                <View key={i} style={styles.gradeCard}>
-                  <View style={styles.gradeTop}>
-                    <Text style={styles.gradeSubject}>{g.subject}</Text>
-                    <View style={styles.gradeRight}>
-                      <Text style={[styles.gradeScore, {color: col}]}>
-                        {g.score}<Text style={styles.gradeOf}>/{g.total}</Text>
-                      </Text>
-                      <View style={[styles.gradePill, {backgroundColor: col + '20', borderColor: col}]}>
-                        <Text style={[styles.gradePillTxt, {color: col}]}>{gradeLabel(g.score)}</Text>
+            {loadingMarks ? (
+              <ActivityIndicator color="#7c3aed" size="large" style={{marginTop: 20}} />
+            ) : marks.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <ChartBarIcon size={40} color="#c4b5fd" />
+                <Text style={styles.emptyTxt}>No marks yet</Text>
+                <Text style={styles.emptySubTxt}>Marks will appear after tests</Text>
+              </View>
+            ) : (
+              // Subject wise report
+              Object.keys(marksBySubject).map((subject, si) => {
+                const subjectMarks = marksBySubject[subject];
+                const subjectAvg = Math.round(
+                  subjectMarks.reduce((a: number, m: any) => a + (m.percentage || 0), 0) / subjectMarks.length
+                );
+                const col = gradeColor(subjectAvg);
+
+                return (
+                  <View key={si} style={styles.subjectBlock}>
+                    {/* Subject header */}
+                    <View style={styles.subjectHeader}>
+                      <Text style={styles.subjectName}>{subject}</Text>
+                      <View style={[styles.subjectAvgPill, {backgroundColor: col + '20', borderColor: col}]}>
+                        <Text style={[styles.subjectAvgTxt, {color: col}]}>{subjectAvg}%</Text>
                       </View>
                     </View>
+
+                    {/* Progress bar */}
+                    <View style={styles.subjectBar}>
+                      <View style={[styles.subjectBarFill, {width: `${subjectAvg}%`, backgroundColor: col}]} />
+                    </View>
+
+                    {/* Test wise breakdown */}
+                    {subjectMarks
+                      .sort((a: any, b: any) => TEST_TYPE_ORDER.indexOf(a.testType) - TEST_TYPE_ORDER.indexOf(b.testType))
+                      .map((m: any, mi: number) => (
+                        <View key={mi} style={styles.testRow}>
+                          <View style={[styles.testTypeBadge, {backgroundColor: gradeColor(m.percentage) + '15'}]}>
+                            <Text style={[styles.testTypeTxt, {color: gradeColor(m.percentage)}]}>
+                              {TEST_TYPE_LABELS[m.testType] || m.testType}
+                            </Text>
+                          </View>
+                          <Text style={styles.testDate}>{m.date}</Text>
+                          <Text style={styles.testMarks}>
+                            {m.obtained}/{m.total}
+                          </Text>
+                          <View style={[styles.gradePill, {
+                            backgroundColor: gradeColor(m.percentage) + '20',
+                            borderColor: gradeColor(m.percentage),
+                          }]}>
+                            <Text style={[styles.gradePillTxt, {color: gradeColor(m.percentage)}]}>
+                              {m.grade}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
                   </View>
-                  <View style={styles.gradeBar}>
-                    <View style={[styles.gradeBarFill, {width: `${pct}%`, backgroundColor: col}]} />
-                  </View>
-                </View>
-              );
-            })}
+                );
+              })
+            )}
           </View>
         )}
 
@@ -364,104 +456,81 @@ const styles = StyleSheet.create({
   heroInfo: {flex: 1},
   heroName: {fontSize: 15, fontWeight: '700', color: '#1e1b4b'},
   heroMeta: {fontSize: 11, color: '#6b7280', marginTop: 2},
-  heroId: {fontSize: 10, color: '#c4b5fd', marginTop: 1, fontFamily: 'monospace'},
-  heroBadge: {
-    borderWidth: 1, borderRadius: 10, padding: 8, alignItems: 'center',
-  },
+  heroId: {fontSize: 10, color: '#c4b5fd', marginTop: 1},
+  heroBadge: {borderWidth: 1, borderRadius: 10, padding: 8, alignItems: 'center'},
   heroBadgeVal: {fontSize: 16, fontWeight: '700'},
   heroBadgeLbl: {fontSize: 9, color: '#6b7280', fontWeight: '500', marginTop: 1},
   tabRow: {
     flexDirection: 'row', backgroundColor: '#ffffff',
     borderBottomWidth: 1, borderBottomColor: '#ede9fe',
   },
-  tab: {
-    flex: 1, paddingVertical: 11, alignItems: 'center',
-    borderBottomWidth: 2, borderBottomColor: 'transparent',
-  },
+  tab: {flex: 1, paddingVertical: 11, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent'},
   tabOn: {borderBottomColor: '#7c3aed'},
   tabTxt: {fontSize: 12, fontWeight: '500', color: '#9ca3af'},
   tabTxtOn: {color: '#7c3aed', fontWeight: '700'},
   content: {flex: 1, paddingHorizontal: 14, paddingTop: 14},
   statsRow: {flexDirection: 'row', gap: 8, marginBottom: 14},
-  statCard: {
-    flex: 1, borderRadius: 12, padding: 12,
-    alignItems: 'center', gap: 4, borderWidth: 1,
-  },
-  statVal: {fontSize: 22, fontWeight: '700'},
+  statCard: {flex: 1, borderRadius: 12, padding: 12, alignItems: 'center', gap: 4, borderWidth: 1},
+  statVal: {fontSize: 20, fontWeight: '700'},
   statLbl: {fontSize: 11, color: '#6b7280', fontWeight: '500'},
-  card: {
-    backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: '#ede9fe', marginBottom: 14,
-  },
+  card: {backgroundColor: '#ffffff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#ede9fe', marginBottom: 14},
   cardTitle: {fontSize: 15, fontWeight: '700', color: '#1e1b4b', marginBottom: 12},
-  profileRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
-  },
+  profileRow: {flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#f3f4f6'},
   profileLabel: {fontSize: 12, color: '#6b7280', fontWeight: '500', width: 80},
   profileValue: {fontSize: 13, color: '#1e1b4b', fontWeight: '600', flex: 1},
-  attSummary: {
-    backgroundColor: '#1e1b4b', borderRadius: 16, padding: 20,
-    alignItems: 'center', marginBottom: 14,
-  },
+  attSummary: {backgroundColor: '#1e1b4b', borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 14},
   attPct: {fontSize: 40, fontWeight: '700', color: '#ffffff'},
   attLabel: {fontSize: 13, color: '#a78bfa', marginTop: 4, marginBottom: 12},
-  attBar: {
-    width: '100%', height: 6, backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 3, overflow: 'hidden',
-  },
+  attBar: {width: '100%', height: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, overflow: 'hidden'},
   attBarFill: {height: '100%', borderRadius: 3},
-  emptyBox: {alignItems: 'center', paddingVertical: 40, gap: 10},
+  attStats: {flexDirection: 'row', gap: 16, marginTop: 12},
+  attStat: {fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '500'},
+  emptyBox: {alignItems: 'center', paddingVertical: 40, gap: 8},
   emptyTxt: {fontSize: 14, color: '#9ca3af', fontWeight: '500'},
+  emptySubTxt: {fontSize: 12, color: '#c4b5fd'},
   attRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#ffffff', borderRadius: 10, padding: 12,
     marginBottom: 6, borderWidth: 1, borderColor: '#ede9fe',
   },
-  attDateBox: {
-    backgroundColor: '#f5f3ff', borderRadius: 8,
-    paddingHorizontal: 8, paddingVertical: 4,
-  },
+  attDateBox: {backgroundColor: '#f5f3ff', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4},
   attDate: {fontSize: 11, fontWeight: '600', color: '#7c3aed'},
-  attClass: {flex: 1, fontSize: 12, color: '#6b7280', fontWeight: '500'},
-  attStatus: {flexDirection: 'row', alignItems: 'center', gap: 4},
+  attClass: {flex: 1, fontSize: 12, color: '#6b7280', fontWeight: '500', marginLeft: 8},
   attStatusTxt: {fontSize: 12, fontWeight: '600'},
   gpaBanner: {
-    backgroundColor: '#1e1b4b', borderRadius: 14, padding: 18,
+    backgroundColor: '#1e1b4b', borderRadius: 16, padding: 20,
     flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 12,
+    alignItems: 'center', marginBottom: 16,
   },
   gpaEye: {fontSize: 10, letterSpacing: 2, color: '#a78bfa', fontWeight: '600', marginBottom: 4},
-  gpaVal: {fontSize: 32, fontWeight: '700', color: '#ffffff'},
-  gpaGrade: {fontSize: 13, color: '#a78bfa', fontWeight: '500', marginTop: 2},
+  gpaVal: {fontSize: 36, fontWeight: '700', color: '#ffffff'},
+  gpaGrade: {fontSize: 14, color: '#a78bfa', fontWeight: '600', marginTop: 2},
   rankBox: {
-    backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 10,
-    padding: 14, alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12,
+    padding: 16, alignItems: 'center', gap: 4,
   },
-  rankVal: {fontSize: 24, fontWeight: '700', color: '#ffffff'},
-  rankLbl: {fontSize: 10, color: '#a78bfa', fontWeight: '500', marginTop: 2},
-  gradeCard: {
-    backgroundColor: '#ffffff', borderRadius: 12, padding: 14,
-    marginBottom: 8, borderWidth: 1, borderColor: '#ede9fe',
+  rankVal: {fontSize: 22, fontWeight: '700', color: '#ffffff'},
+  rankLbl: {fontSize: 10, color: '#a78bfa', fontWeight: '500'},
+  subjectBlock: {
+    backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
+    marginBottom: 12, borderWidth: 1, borderColor: '#ede9fe',
   },
-  gradeTop: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 10,
+  subjectHeader: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8},
+  subjectName: {fontSize: 15, fontWeight: '700', color: '#1e1b4b'},
+  subjectAvgPill: {borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3},
+  subjectAvgTxt: {fontSize: 12, fontWeight: '700'},
+  subjectBar: {height: 4, backgroundColor: '#f3f4f6', borderRadius: 2, overflow: 'hidden', marginBottom: 12},
+  subjectBarFill: {height: '100%', borderRadius: 2},
+  testRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#f3f4f6',
   },
-  gradeSubject: {fontSize: 14, fontWeight: '700', color: '#1e1b4b'},
-  gradeRight: {alignItems: 'flex-end', gap: 4},
-  gradeScore: {fontSize: 18, fontWeight: '700'},
-  gradeOf: {fontSize: 12, color: '#9ca3af'},
-  gradePill: {
-    borderWidth: 1, borderRadius: 20,
-    paddingHorizontal: 8, paddingVertical: 2,
-  },
+  testTypeBadge: {borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3},
+  testTypeTxt: {fontSize: 11, fontWeight: '600'},
+  testDate: {flex: 1, fontSize: 11, color: '#9ca3af'},
+  testMarks: {fontSize: 13, fontWeight: '700', color: '#1e1b4b'},
+  gradePill: {borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2},
   gradePillTxt: {fontSize: 10, fontWeight: '700'},
-  gradeBar: {
-    height: 4, backgroundColor: '#f3f4f6',
-    borderRadius: 2, overflow: 'hidden',
-  },
-  gradeBarFill: {height: '100%', borderRadius: 2},
   ttDay: {fontSize: 14, fontWeight: '600', color: '#6b7280', marginBottom: 10},
   ttCard: {
     flexDirection: 'row', backgroundColor: '#ffffff',
@@ -471,8 +540,7 @@ const styles = StyleSheet.create({
   ttBreak: {opacity: 0.5},
   ttTimeCol: {
     width: 54, padding: 12, alignItems: 'center',
-    justifyContent: 'center', borderRightWidth: 1,
-    borderRightColor: '#f3f4f6',
+    justifyContent: 'center', borderRightWidth: 1, borderRightColor: '#f3f4f6',
   },
   ttTime: {fontSize: 11, fontWeight: '600', color: '#6b7280'},
   ttBody: {flex: 1, padding: 12},
