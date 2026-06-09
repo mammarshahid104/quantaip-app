@@ -14,7 +14,6 @@ import {
   AcademicCapIcon,
   CalendarDaysIcon,
   ChartBarIcon,
-  ClockIcon,
   CheckCircleIcon,
   XCircleIcon,
   ArrowRightOnRectangleIcon,
@@ -23,7 +22,7 @@ import {
 } from 'react-native-heroicons/outline';
 
 const SCHOOL_CODE = 'GHS-001';
-const TABS = ['Overview', 'Attendance', 'Grades', 'Timetable'];
+const TABS = ['Overview', 'Attendance', 'Grades', 'Results', 'Timetable'];
 
 const TEST_TYPE_ORDER = ['weekly', 'monthly', 'midterm', 'sendup', 'final', 'classtest'];
 const TEST_TYPE_LABELS: any = {
@@ -40,16 +39,16 @@ export default function StudentScreen({navigation}: any) {
   const [student, setStudent] = useState<any>(null);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [marks, setMarks] = useState<any[]>([]);
+  const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMarks, setLoadingMarks] = useState(false);
+  const [loadingResults, setLoadingResults] = useState(false);
 
   const today = new Date().toLocaleDateString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
   });
 
-  useEffect(() => {
-    loadStudent();
-  }, []);
+  useEffect(() => {loadStudent();}, []);
 
   const loadStudent = async () => {
     try {
@@ -75,7 +74,6 @@ export default function StudentScreen({navigation}: any) {
       const snapshot = await firestore()
         .collection('schools').doc(SCHOOL_CODE)
         .collection('attendance').get();
-
       const records: any[] = [];
       for (const dateDoc of snapshot.docs) {
         const attDoc = await firestore()
@@ -92,51 +90,67 @@ export default function StudentScreen({navigation}: any) {
   };
 
   const loadMarks = async () => {
-  if (!student) return;
-  setLoadingMarks(true);
-  try {
-    const testsSnap = await firestore()
-      .collection('schools').doc(SCHOOL_CODE)
-      .collection('marks')
-      .get();
-
-    const allMarks: any[] = [];
-
-    for (const testDoc of testsSnap.docs) {
-      const testData = testDoc.data();
-      
-      // Sirf is student ki class ka test
-      if (testData.class !== student.class) continue;
-
-      const studentMarkDoc = await firestore()
+    if (!student) return;
+    setLoadingMarks(true);
+    try {
+      const testsSnap = await firestore()
         .collection('schools').doc(SCHOOL_CODE)
-        .collection('marks').doc(testDoc.id)
-        .collection('students').doc(student.id)
+        .collection('marks')
         .get();
-
-      if (studentMarkDoc.exists) {
-        allMarks.push({
-          ...testData,
-          ...studentMarkDoc.data(),
-        });
+      const allMarks: any[] = [];
+      for (const testDoc of testsSnap.docs) {
+        const testData = testDoc.data();
+        if (testData.class !== student.class) continue;
+        const studentMarkDoc = await firestore()
+          .collection('schools').doc(SCHOOL_CODE)
+          .collection('marks').doc(testDoc.id)
+          .collection('students').doc(student.id)
+          .get();
+        if (studentMarkDoc.exists) {
+          allMarks.push({...testData, ...studentMarkDoc.data()});
+        }
       }
+      setMarks(allMarks.sort((a, b) => b.date?.localeCompare(a.date)));
+    } catch (e) {
+      console.log('Marks error:', e);
+    } finally {
+      setLoadingMarks(false);
     }
+  };
 
-    setMarks(allMarks.sort((a, b) => b.date?.localeCompare(a.date)));
-  } catch (e) {
-    console.log('Marks error:', e);
-  } finally {
-    setLoadingMarks(false);
-  }
-};
+  const loadResults = async () => {
+    if (!student) return;
+    setLoadingResults(true);
+    try {
+      const resultsSnap = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('results')
+        .get();
+      const myResults: any[] = [];
+      for (const resultDoc of resultsSnap.docs) {
+        const resultData = resultDoc.data();
+        if (resultData.class !== student.class) continue;
+        const studentResult = await firestore()
+          .collection('schools').doc(SCHOOL_CODE)
+          .collection('results').doc(resultDoc.id)
+          .collection('students').doc(student.id)
+          .get();
+        if (studentResult.exists) {
+          myResults.push({...resultData, ...studentResult.data()});
+        }
+      }
+      setResults(myResults);
+    } catch (e) {
+    } finally {
+      setLoadingResults(false);
+    }
+  };
 
   useEffect(() => {
-    if (tab === 'Grades' && student) {
-      loadMarks();
-    }
+    if (tab === 'Grades' && student) loadMarks();
+    if (tab === 'Results' && student) loadResults();
   }, [tab, student]);
 
-  // Group marks by subject
   const marksBySubject = marks.reduce((acc: any, m) => {
     const subj = m.subject || 'Unknown';
     if (!acc[subj]) acc[subj] = [];
@@ -144,7 +158,6 @@ export default function StudentScreen({navigation}: any) {
     return acc;
   }, {});
 
-  // Calculate overall average
   const allPercentages = marks.map(m => m.percentage || 0);
   const overallAvg = allPercentages.length > 0
     ? Math.round(allPercentages.reduce((a, b) => a + b, 0) / allPercentages.length)
@@ -223,15 +236,18 @@ export default function StudentScreen({navigation}: any) {
       </View>
 
       {/* TABS */}
-      <View style={styles.tabRow}>
-        {TABS.map(t => (
-          <TouchableOpacity key={t}
-            style={[styles.tab, tab === t && styles.tabOn]}
-            onPress={() => setTab(t)}>
-            <Text style={[styles.tabTxt, tab === t && styles.tabTxtOn]}>{t}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}
+        style={{backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ede9fe', maxHeight: 44}}>
+        <View style={{flexDirection: 'row'}}>
+          {TABS.map(t => (
+            <TouchableOpacity key={t}
+              style={[styles.tab, tab === t && styles.tabOn]}
+              onPress={() => setTab(t)}>
+              <Text style={[styles.tabTxt, tab === t && styles.tabTxtOn]}>{t}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
 
       <ScrollView style={styles.content}>
 
@@ -255,7 +271,6 @@ export default function StudentScreen({navigation}: any) {
                 <Text style={styles.statLbl}>Grade</Text>
               </View>
             </View>
-
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Profile</Text>
               {[
@@ -294,7 +309,6 @@ export default function StudentScreen({navigation}: any) {
                 <Text style={styles.attStat}>⏰ {late} Late</Text>
               </View>
             </View>
-
             {attendance.length === 0 ? (
               <View style={styles.emptyBox}>
                 <CalendarDaysIcon size={40} color="#c4b5fd" />
@@ -323,7 +337,6 @@ export default function StudentScreen({navigation}: any) {
         {/* GRADES */}
         {tab === 'Grades' && (
           <View>
-            {/* Overall banner */}
             <View style={styles.gpaBanner}>
               <View>
                 <Text style={styles.gpaEye}>OVERALL PERFORMANCE</Text>
@@ -336,7 +349,6 @@ export default function StudentScreen({navigation}: any) {
                 <Text style={styles.rankLbl}>Tests</Text>
               </View>
             </View>
-
             {loadingMarks ? (
               <ActivityIndicator color="#7c3aed" size="large" style={{marginTop: 20}} />
             ) : marks.length === 0 ? (
@@ -346,30 +358,23 @@ export default function StudentScreen({navigation}: any) {
                 <Text style={styles.emptySubTxt}>Marks will appear after tests</Text>
               </View>
             ) : (
-              // Subject wise report
               Object.keys(marksBySubject).map((subject, si) => {
                 const subjectMarks = marksBySubject[subject];
                 const subjectAvg = Math.round(
                   subjectMarks.reduce((a: number, m: any) => a + (m.percentage || 0), 0) / subjectMarks.length
                 );
                 const col = gradeColor(subjectAvg);
-
                 return (
                   <View key={si} style={styles.subjectBlock}>
-                    {/* Subject header */}
                     <View style={styles.subjectHeader}>
                       <Text style={styles.subjectName}>{subject}</Text>
                       <View style={[styles.subjectAvgPill, {backgroundColor: col + '20', borderColor: col}]}>
                         <Text style={[styles.subjectAvgTxt, {color: col}]}>{subjectAvg}%</Text>
                       </View>
                     </View>
-
-                    {/* Progress bar */}
                     <View style={styles.subjectBar}>
                       <View style={[styles.subjectBarFill, {width: `${subjectAvg}%`, backgroundColor: col}]} />
                     </View>
-
-                    {/* Test wise breakdown */}
                     {subjectMarks
                       .sort((a: any, b: any) => TEST_TYPE_ORDER.indexOf(a.testType) - TEST_TYPE_ORDER.indexOf(b.testType))
                       .map((m: any, mi: number) => (
@@ -380,9 +385,7 @@ export default function StudentScreen({navigation}: any) {
                             </Text>
                           </View>
                           <Text style={styles.testDate}>{m.date}</Text>
-                          <Text style={styles.testMarks}>
-                            {m.obtained}/{m.total}
-                          </Text>
+                          <Text style={styles.testMarks}>{m.obtained}/{m.total}</Text>
                           <View style={[styles.gradePill, {
                             backgroundColor: gradeColor(m.percentage) + '20',
                             borderColor: gradeColor(m.percentage),
@@ -396,6 +399,97 @@ export default function StudentScreen({navigation}: any) {
                   </View>
                 );
               })
+            )}
+          </View>
+        )}
+
+        {/* RESULTS */}
+        {tab === 'Results' && (
+          <View>
+            <View style={styles.gpaBanner}>
+              <View>
+                <Text style={styles.gpaEye}>RESULT CARD</Text>
+                <Text style={[styles.gpaVal, {fontSize: 22}]}>{student?.fullName}</Text>
+                <Text style={styles.gpaGrade}>{student?.class} — {student?.section}</Text>
+              </View>
+              <View style={styles.rankBox}>
+                <TrophyIcon size={24} color="#a78bfa" />
+                <Text style={styles.rankVal}>{results.length}</Text>
+                <Text style={styles.rankLbl}>Results</Text>
+              </View>
+            </View>
+            {loadingResults ? (
+              <ActivityIndicator color="#7c3aed" size="large" style={{marginTop: 20}} />
+            ) : results.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <TrophyIcon size={40} color="#c4b5fd" />
+                <Text style={styles.emptyTxt}>No results yet</Text>
+                <Text style={styles.emptySubTxt}>Results will appear after admin generates them</Text>
+              </View>
+            ) : (
+              results.map((r, i) => (
+                <View key={i} style={styles.card}>
+                  <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
+                    <View>
+                      <Text style={{fontSize: 15, fontWeight: '700', color: '#1e1b4b'}}>
+                        {r.testType?.charAt(0).toUpperCase() + r.testType?.slice(1)} Result
+                      </Text>
+                      <Text style={{fontSize: 11, color: '#9ca3af', marginTop: 2}}>
+                        {r.generatedAt?.toDate?.()?.toLocaleDateString?.() || ''}
+                      </Text>
+                    </View>
+                    <View style={{
+                      backgroundColor: r.position <= 3 ? '#fffbeb' : '#f5f3ff',
+                      borderRadius: 10, padding: 10, alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: r.position <= 3 ? '#fcd34d' : '#c4b5fd',
+                    }}>
+                      <Text style={{fontSize: 18, fontWeight: '700', color: r.position <= 3 ? '#f59e0b' : '#7c3aed'}}>
+                        #{r.position}
+                      </Text>
+                      <Text style={{fontSize: 10, color: '#9ca3af'}}>Position</Text>
+                    </View>
+                  </View>
+                  {r.subjects && Object.keys(r.subjects).map((subj, si) => (
+                    <View key={si} style={{
+                      flexDirection: 'row', justifyContent: 'space-between',
+                      alignItems: 'center', paddingVertical: 8,
+                      borderTopWidth: 1, borderTopColor: '#f3f4f6',
+                    }}>
+                      <Text style={{fontSize: 13, color: '#374151', fontWeight: '500'}}>{subj}</Text>
+                      <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                        <Text style={{fontSize: 13, fontWeight: '600', color: '#1e1b4b'}}>
+                          {r.subjects[subj].obtained}/{r.subjects[subj].total}
+                        </Text>
+                        <View style={{
+                          backgroundColor: r.subjects[subj].grade === 'A+' ? '#f0fdf4' :
+                            r.subjects[subj].grade === 'F' ? '#fef2f2' : '#f5f3ff',
+                          borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+                        }}>
+                          <Text style={{
+                            fontSize: 11, fontWeight: '700',
+                            color: r.subjects[subj].grade === 'A+' ? '#16a34a' :
+                              r.subjects[subj].grade === 'F' ? '#ef4444' : '#7c3aed',
+                          }}>{r.subjects[subj].grade}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                  <View style={{
+                    flexDirection: 'row', justifyContent: 'space-between',
+                    alignItems: 'center', marginTop: 10, paddingTop: 10,
+                    borderTopWidth: 2, borderTopColor: '#ede9fe',
+                  }}>
+                    <Text style={{fontSize: 14, fontWeight: '700', color: '#1e1b4b'}}>Total</Text>
+                    <View style={{alignItems: 'flex-end'}}>
+                      <Text style={{fontSize: 16, fontWeight: '700', color: '#7c3aed'}}>
+                        {r.totalObtained}/{r.totalMarks}
+                      </Text>
+                      <Text style={{fontSize: 12, color: '#6b7280'}}>{r.percentage}% · Grade {r.grade}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))
             )}
           </View>
         )}
@@ -416,9 +510,7 @@ export default function StudentScreen({navigation}: any) {
                   <Text style={[styles.ttSubject,
                     (t.subject === 'Break' || t.subject === 'Lunch') && {color: '#9ca3af'}
                   ]}>{t.subject}</Text>
-                  {t.teacher ? (
-                    <Text style={styles.ttMeta}>{t.teacher} · {t.room}</Text>
-                  ) : null}
+                  {t.teacher ? <Text style={styles.ttMeta}>{t.teacher} · {t.room}</Text> : null}
                 </View>
               </View>
             ))}
@@ -460,11 +552,7 @@ const styles = StyleSheet.create({
   heroBadge: {borderWidth: 1, borderRadius: 10, padding: 8, alignItems: 'center'},
   heroBadgeVal: {fontSize: 16, fontWeight: '700'},
   heroBadgeLbl: {fontSize: 9, color: '#6b7280', fontWeight: '500', marginTop: 1},
-  tabRow: {
-    flexDirection: 'row', backgroundColor: '#ffffff',
-    borderBottomWidth: 1, borderBottomColor: '#ede9fe',
-  },
-  tab: {flex: 1, paddingVertical: 11, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent'},
+  tab: {paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 2, borderBottomColor: 'transparent'},
   tabOn: {borderBottomColor: '#7c3aed'},
   tabTxt: {fontSize: 12, fontWeight: '500', color: '#9ca3af'},
   tabTxtOn: {color: '#7c3aed', fontWeight: '700'},
