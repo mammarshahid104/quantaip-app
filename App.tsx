@@ -52,10 +52,10 @@ const formatId = (text: string): string => {
 };
 
 const ROLE_INFO: any = {
-  admin:   {label: 'Admin',   color: '#7c3aed'},
-  teacher: {label: 'Teacher', color: '#0891b2'},
-  student: {label: 'Student', color: '#16a34a'},
-  parent:  {label: 'Parent',  color: '#ea580c'},
+  admin:   {label: 'Admin',   color: '#4f46e5'},
+  teacher: {label: 'Teacher', color: '#059669'},
+  student: {label: 'Student', color: '#0284c7'},
+  parent:  {label: 'Parent',  color: '#9333ea'},
 };
 
 function RoleIcon({role, size, color}: {role: string, size: number, color: string}) {

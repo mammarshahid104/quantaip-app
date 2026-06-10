@@ -13,7 +13,6 @@ import {
   UserIcon,
   AcademicCapIcon,
   BanknotesIcon,
-  BellIcon,
   ChartBarIcon,
   CheckCircleIcon,
   ClockIcon,
@@ -22,8 +21,7 @@ import {
 } from 'react-native-heroicons/outline';
 
 const SCHOOL_CODE = 'GHS-001';
-
-const TABS = ['Overview', 'Attendance', 'Fee', 'Notifications'];
+const TABS = ['Overview', 'Attendance', 'Fee', 'Results', 'Notifications'];
 
 export default function ParentScreen({navigation}: any) {
   const [tab, setTab] = useState('Overview');
@@ -33,12 +31,16 @@ export default function ParentScreen({navigation}: any) {
   const [feeStatus, setFeeStatus] = useState<any>(null);
   const [feeStructure, setFeeStructure] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [results, setResults] = useState<any[]>([]);
+  const [loadingResults, setLoadingResults] = useState(false);
 
   const month = new Date().toLocaleString('default', {month: 'long', year: 'numeric'});
 
+  useEffect(() => {loadParentData();}, []);
+
   useEffect(() => {
-    loadParentData();
-  }, []);
+    if (tab === 'Results' && student) loadResults();
+  }, [tab, student]);
 
   const loadParentData = async () => {
     try {
@@ -46,7 +48,6 @@ export default function ParentScreen({navigation}: any) {
       if (!user) return;
       const id = user.email?.split('@')[0].toUpperCase();
 
-      // Load parent record
       const parentDoc = await firestore()
         .collection('schools').doc(SCHOOL_CODE)
         .collection('parents').doc(id)
@@ -56,7 +57,6 @@ export default function ParentScreen({navigation}: any) {
         const parentData = parentDoc.data();
         setParent(parentData);
 
-        // Load student record
         if (parentData?.studentId) {
           const studentDoc = await firestore()
             .collection('schools').doc(SCHOOL_CODE)
@@ -67,11 +67,9 @@ export default function ParentScreen({navigation}: any) {
             const studentData = studentDoc.data();
             setStudent(studentData);
 
-            // Load attendance
             const attSnap = await firestore()
               .collection('schools').doc(SCHOOL_CODE)
-              .collection('attendance')
-              .get();
+              .collection('attendance').get();
 
             const records: any[] = [];
             for (const dateDoc of attSnap.docs) {
@@ -86,7 +84,6 @@ export default function ParentScreen({navigation}: any) {
             }
             setAttendance(records.sort((a, b) => b.date.localeCompare(a.date)));
 
-            // Load fee status
             const feeDoc = await firestore()
               .collection('schools').doc(SCHOOL_CODE)
               .collection('fees').doc(month)
@@ -94,7 +91,6 @@ export default function ParentScreen({navigation}: any) {
               .get();
             setFeeStatus(feeDoc.exists ? feeDoc.data() : null);
 
-            // Load fee structure
             const feeStructDoc = await firestore()
               .collection('schools').doc(SCHOOL_CODE)
               .collection('feeStructure').doc(studentData?.class)
@@ -109,11 +105,39 @@ export default function ParentScreen({navigation}: any) {
     }
   };
 
+  const loadResults = async () => {
+    if (!student) return;
+    setLoadingResults(true);
+    try {
+      const resultsSnap = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('results')
+        .get();
+
+      const myResults: any[] = [];
+      for (const resultDoc of resultsSnap.docs) {
+        const resultData = resultDoc.data();
+        if (resultData.class !== student.class) continue;
+        const studentResult = await firestore()
+          .collection('schools').doc(SCHOOL_CODE)
+          .collection('results').doc(resultDoc.id)
+          .collection('students').doc(student.id)
+          .get();
+        if (studentResult.exists) {
+          myResults.push({...resultData, ...studentResult.data()});
+        }
+      }
+      setResults(myResults);
+    } catch (e) {
+    } finally {
+      setLoadingResults(false);
+    }
+  };
+
   const present = attendance.filter(a => a.status === 'P').length;
   const absent = attendance.filter(a => a.status === 'A').length;
   const late = attendance.filter(a => a.status === 'L').length;
-  const total = attendance.length;
-  const attendancePct = total > 0 ? Math.round((present / total) * 100) : 0;
+  const attendancePct = attendance.length > 0 ? Math.round((present / attendance.length) * 100) : 0;
 
   const calculateFinalFee = () => {
     if (!student || !feeStructure) return 0;
@@ -147,8 +171,7 @@ export default function ParentScreen({navigation}: any) {
           <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
           <Text style={styles.navSub}>PARENT PORTAL</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
+        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>
@@ -168,8 +191,7 @@ export default function ParentScreen({navigation}: any) {
         <View style={[styles.attBadge,
           {backgroundColor: attendancePct >= 75 ? '#f0fdf4' : '#fef2f2',
            borderColor: attendancePct >= 75 ? '#86efac' : '#fca5a5'}]}>
-          <Text style={[styles.attBadgeVal,
-            {color: attendancePct >= 75 ? '#16a34a' : '#ef4444'}]}>
+          <Text style={[styles.attBadgeVal, {color: attendancePct >= 75 ? '#16a34a' : '#ef4444'}]}>
             {attendancePct}%
           </Text>
           <Text style={styles.attBadgeLbl}>Attend.</Text>
@@ -177,22 +199,24 @@ export default function ParentScreen({navigation}: any) {
       </View>
 
       {/* TABS */}
-      <View style={styles.tabRow}>
-        {TABS.map(t => (
-          <TouchableOpacity key={t}
-            style={[styles.tab, tab === t && styles.tabOn]}
-            onPress={() => setTab(t)}>
-            <Text style={[styles.tabTxt, tab === t && styles.tabTxtOn]}>{t}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}
+        style={{backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ede9fe', maxHeight: 44}}>
+        <View style={{flexDirection: 'row'}}>
+          {TABS.map(t => (
+            <TouchableOpacity key={t}
+              style={[styles.tab, tab === t && styles.tabOn]}
+              onPress={() => setTab(t)}>
+              <Text style={[styles.tabTxt, tab === t && styles.tabTxtOn]}>{t}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
 
       <ScrollView style={styles.content}>
 
         {/* OVERVIEW */}
         {tab === 'Overview' && (
           <View>
-            {/* Quick stats */}
             <View style={styles.statsRow}>
               <View style={[styles.statCard, {backgroundColor: '#f0fdf4', borderColor: '#bbf7d0'}]}>
                 <CheckCircleIcon size={18} color="#16a34a" />
@@ -216,7 +240,6 @@ export default function ParentScreen({navigation}: any) {
               </View>
             </View>
 
-            {/* Profile */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Child Profile</Text>
               {[
@@ -254,7 +277,6 @@ export default function ParentScreen({navigation}: any) {
                 <Text style={styles.attStat}>⏰ Late: {late}</Text>
               </View>
             </View>
-
             {attendance.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Text style={styles.emptyTxt}>No attendance records yet</Text>
@@ -282,19 +304,16 @@ export default function ParentScreen({navigation}: any) {
         {tab === 'Fee' && (
           <View>
             <Text style={styles.sectionTitle}>Fee Status — {month}</Text>
-
             <View style={[styles.feeBanner,
               {backgroundColor: feeStatus?.status === 'paid' ? '#f0fdf4' : '#fef2f2',
                borderColor: feeStatus?.status === 'paid' ? '#86efac' : '#fca5a5'}]}>
               {feeStatus?.status === 'paid'
                 ? <CheckCircleIcon size={32} color="#16a34a" />
                 : <ClockIcon size={32} color="#ef4444" />}
-              <Text style={[styles.feeStatusTxt,
-                {color: feeStatus?.status === 'paid' ? '#16a34a' : '#ef4444'}]}>
+              <Text style={[styles.feeStatusTxt, {color: feeStatus?.status === 'paid' ? '#16a34a' : '#ef4444'}]}>
                 {feeStatus?.status === 'paid' ? 'Fee Paid ✅' : 'Fee Pending ⚠️'}
               </Text>
             </View>
-
             <View style={styles.card}>
               {[
                 {label: 'Standard Fee', value: `PKR ${feeStructure.toLocaleString()}`},
@@ -317,11 +336,103 @@ export default function ParentScreen({navigation}: any) {
           </View>
         )}
 
+        {/* RESULTS */}
+        {tab === 'Results' && (
+          <View>
+            <View style={[styles.feeBanner, {backgroundColor: '#1e1b4b', borderColor: '#1e1b4b', marginBottom: 16}]}>
+              <View style={{flex: 1}}>
+                <Text style={{fontSize: 10, letterSpacing: 2, color: '#a78bfa', fontWeight: '600', marginBottom: 4}}>
+                  RESULT CARD
+                </Text>
+                <Text style={{fontSize: 18, fontWeight: '700', color: '#ffffff'}}>{student?.fullName}</Text>
+                <Text style={{fontSize: 12, color: '#a78bfa', marginTop: 2}}>
+                  {student?.class} — {student?.section}
+                </Text>
+              </View>
+              <View style={{backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 12, alignItems: 'center'}}>
+                <Text style={{fontSize: 22, fontWeight: '700', color: '#ffffff'}}>{results.length}</Text>
+                <Text style={{fontSize: 10, color: '#a78bfa'}}>Results</Text>
+              </View>
+            </View>
+
+            {loadingResults ? (
+              <ActivityIndicator color="#7c3aed" size="large" style={{marginTop: 20}} />
+            ) : results.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyTxt}>No results yet</Text>
+              </View>
+            ) : (
+              results.map((r, i) => (
+                <View key={i} style={styles.card}>
+                  <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
+                    <View>
+                      <Text style={{fontSize: 15, fontWeight: '700', color: '#1e1b4b'}}>
+                        {r.testType?.charAt(0).toUpperCase() + r.testType?.slice(1)} Result
+                      </Text>
+                      <Text style={{fontSize: 11, color: '#9ca3af', marginTop: 2}}>
+                        {r.generatedAt?.toDate?.()?.toLocaleDateString?.() || ''}
+                      </Text>
+                    </View>
+                    <View style={{
+                      backgroundColor: r.position <= 3 ? '#fffbeb' : '#f5f3ff',
+                      borderRadius: 10, padding: 10, alignItems: 'center',
+                      borderWidth: 1, borderColor: r.position <= 3 ? '#fcd34d' : '#c4b5fd',
+                    }}>
+                      <Text style={{fontSize: 18, fontWeight: '700', color: r.position <= 3 ? '#f59e0b' : '#7c3aed'}}>
+                        #{r.position}
+                      </Text>
+                      <Text style={{fontSize: 10, color: '#9ca3af'}}>Position</Text>
+                    </View>
+                  </View>
+
+                  {r.subjects && Object.keys(r.subjects).map((subj, si) => (
+                    <View key={si} style={{
+                      flexDirection: 'row', justifyContent: 'space-between',
+                      alignItems: 'center', paddingVertical: 8,
+                      borderTopWidth: 1, borderTopColor: '#f3f4f6',
+                    }}>
+                      <Text style={{fontSize: 13, color: '#374151', fontWeight: '500'}}>{subj}</Text>
+                      <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                        <Text style={{fontSize: 13, fontWeight: '600', color: '#1e1b4b'}}>
+                          {r.subjects[subj].obtained}/{r.subjects[subj].total}
+                        </Text>
+                        <View style={{
+                          backgroundColor: r.subjects[subj].grade === 'A+' ? '#f0fdf4' :
+                            r.subjects[subj].grade === 'F' ? '#fef2f2' : '#f5f3ff',
+                          borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+                        }}>
+                          <Text style={{fontSize: 11, fontWeight: '700',
+                            color: r.subjects[subj].grade === 'A+' ? '#16a34a' :
+                              r.subjects[subj].grade === 'F' ? '#ef4444' : '#7c3aed',
+                          }}>{r.subjects[subj].grade}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+
+                  <View style={{
+                    flexDirection: 'row', justifyContent: 'space-between',
+                    alignItems: 'center', marginTop: 10, paddingTop: 10,
+                    borderTopWidth: 2, borderTopColor: '#ede9fe',
+                  }}>
+                    <Text style={{fontSize: 14, fontWeight: '700', color: '#1e1b4b'}}>Total</Text>
+                    <View style={{alignItems: 'flex-end'}}>
+                      <Text style={{fontSize: 16, fontWeight: '700', color: '#7c3aed'}}>
+                        {r.totalObtained}/{r.totalMarks}
+                      </Text>
+                      <Text style={{fontSize: 12, color: '#6b7280'}}>{r.percentage}% · Grade {r.grade}</Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+
         {/* NOTIFICATIONS */}
         {tab === 'Notifications' && (
           <View>
             <Text style={styles.sectionTitle}>Notifications</Text>
-
             {absent > 0 && (
               <View style={[styles.notifCard, {backgroundColor: '#fef2f2', borderLeftColor: '#ef4444', borderColor: '#fecaca'}]}>
                 <ExclamationCircleIcon size={18} color="#ef4444" />
@@ -333,7 +444,6 @@ export default function ParentScreen({navigation}: any) {
                 </View>
               </View>
             )}
-
             {feeStatus?.status !== 'paid' && (
               <View style={[styles.notifCard, {backgroundColor: '#fffbeb', borderLeftColor: '#f59e0b', borderColor: '#fde68a'}]}>
                 <BanknotesIcon size={18} color="#f59e0b" />
@@ -345,15 +455,12 @@ export default function ParentScreen({navigation}: any) {
                 </View>
               </View>
             )}
-
             {feeStatus?.status === 'paid' && absent === 0 && (
               <View style={[styles.notifCard, {backgroundColor: '#f0fdf4', borderLeftColor: '#16a34a', borderColor: '#bbf7d0'}]}>
                 <CheckCircleIcon size={18} color="#16a34a" />
                 <View style={styles.notifBody}>
                   <Text style={styles.notifTitle}>All Good! ✅</Text>
-                  <Text style={styles.notifDesc}>
-                    No pending issues for {student?.fullName}.
-                  </Text>
+                  <Text style={styles.notifDesc}>No pending issues for {student?.fullName}.</Text>
                 </View>
               </View>
             )}
@@ -395,11 +502,7 @@ const styles = StyleSheet.create({
   attBadge: {borderWidth: 1, borderRadius: 10, padding: 8, alignItems: 'center'},
   attBadgeVal: {fontSize: 16, fontWeight: '700'},
   attBadgeLbl: {fontSize: 9, color: '#6b7280', fontWeight: '500', marginTop: 1},
-  tabRow: {
-    flexDirection: 'row', backgroundColor: '#ffffff',
-    borderBottomWidth: 1, borderBottomColor: '#ede9fe',
-  },
-  tab: {flex: 1, paddingVertical: 11, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent'},
+  tab: {paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 2, borderBottomColor: 'transparent'},
   tabOn: {borderBottomColor: '#7c3aed'},
   tabTxt: {fontSize: 12, fontWeight: '500', color: '#9ca3af'},
   tabTxtOn: {color: '#7c3aed', fontWeight: '700'},
