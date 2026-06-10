@@ -69,24 +69,16 @@ export default function StudentScreen({navigation}: any) {
     }
   };
 
-  const loadAttendance = async (studentData: any) => {
-    try {
-      const snapshot = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
-        .collection('attendance').get();
-      const records: any[] = [];
-      for (const dateDoc of snapshot.docs) {
-        const attDoc = await firestore()
-          .collection('schools').doc(SCHOOL_CODE)
-          .collection('attendance').doc(dateDoc.id)
-          .collection(studentData?.class).doc(studentData?.id)
-          .get();
-        if (attDoc.exists) {
-          records.push({date: dateDoc.id, ...attDoc.data()});
-        }
-      }
-      setAttendance(records.sort((a, b) => b.date.localeCompare(a.date)));
-    } catch (e) {}
+  const loadAttendance = (studentData: any) => {
+    // NAYA TAREEQA: koi extra Firestore read nahi!
+    // attendanceMap pehle se student ke doc mein hai (1 read mein aa chuka)
+    const map = studentData?.attendanceMap || {};
+    const records = Object.keys(map).map(date => ({
+      date,
+      status: map[date],
+      class: studentData?.class,
+    }));
+    setAttendance(records.sort((a, b) => b.date.localeCompare(a.date)));
   };
 
   const loadMarks = async () => {
@@ -205,7 +197,7 @@ export default function StudentScreen({navigation}: any) {
           <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
           <Text style={styles.navSub}>STUDENT PORTAL</Text>
         </View>
-        <TouchableOpacity onPress={() => {auth().signOut(); navigation.reset({index: 0, routes: [{name: 'Login'}]});}}>
+        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>

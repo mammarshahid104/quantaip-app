@@ -67,21 +67,13 @@ export default function ParentScreen({navigation}: any) {
             const studentData = studentDoc.data();
             setStudent(studentData);
 
-            const attSnap = await firestore()
-              .collection('schools').doc(SCHOOL_CODE)
-              .collection('attendance').get();
-
-            const records: any[] = [];
-            for (const dateDoc of attSnap.docs) {
-              const attDoc = await firestore()
-                .collection('schools').doc(SCHOOL_CODE)
-                .collection('attendance').doc(dateDoc.id)
-                .collection(studentData?.class).doc(studentData?.id)
-                .get();
-              if (attDoc.exists) {
-                records.push({date: dateDoc.id, ...attDoc.data()});
-              }
-            }
+            // NAYA TAREEQA: attendanceMap se direct — koi extra read nahi!
+            const map = studentData?.attendanceMap || {};
+            const records = Object.keys(map).map(date => ({
+              date,
+              status: map[date],
+              class: studentData?.class,
+            }));
             setAttendance(records.sort((a, b) => b.date.localeCompare(a.date)));
 
             const feeDoc = await firestore()
@@ -171,7 +163,7 @@ export default function ParentScreen({navigation}: any) {
           <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
           <Text style={styles.navSub}>PARENT PORTAL</Text>
         </View>
-        <TouchableOpacity onPress={() => {auth().signOut(); navigation.reset({index: 0, routes: [{name: 'Login'}]});}}>
+        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>
