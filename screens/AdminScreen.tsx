@@ -36,7 +36,7 @@ import {
 import ClassesScreen from './ClassesScreen';
 import FeeScreen from './FeeScreen';
 
-const SCHOOL_CODE = 'GHS-001';
+import {SCHOOL_CODE} from '../config';
 
 const CLASS_HIERARCHY = [
   {category: 'Early Education', classes: ['Nursery', 'Prep', 'KG']},
@@ -133,7 +133,7 @@ export default function AdminScreen({navigation}: any) {
         ? `${(totalFee / 1000).toFixed(0)}K`
         : totalFee.toString();
       setStats({students: sSnap.size, teachers: tSnap.size, fee: feeFormatted});
-    } catch (e) {}
+    } catch (e) {console.log('❌ QUANTAIP Error:', e);}
   };
 
   const loadStudents = async () => {
@@ -143,7 +143,7 @@ export default function AdminScreen({navigation}: any) {
         .collection('schools').doc(SCHOOL_CODE)
         .collection('students').get();
       setStudentList(snap.docs.map(d => d.data()));
-    } catch (e) {} finally {setLoadingStudents(false);}
+    } catch (e) {console.log('❌ QUANTAIP Error:', e);} finally {setLoadingStudents(false);}
   };
 
   const loadTeachers = async () => {
@@ -153,7 +153,7 @@ export default function AdminScreen({navigation}: any) {
         .collection('schools').doc(SCHOOL_CODE)
         .collection('teachers').get();
       setTeacherList(snap.docs.map(d => d.data()));
-    } catch (e) {} finally {setLoadingTeachers(false);}
+    } catch (e) {console.log('❌ QUANTAIP Error:', e);} finally {setLoadingTeachers(false);}
   };
 
   useEffect(() => {

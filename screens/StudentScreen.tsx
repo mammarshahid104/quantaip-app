@@ -21,7 +21,7 @@ import {
   TrophyIcon,
 } from 'react-native-heroicons/outline';
 
-const SCHOOL_CODE = 'GHS-001';
+import {SCHOOL_CODE} from '../config';
 const TABS = ['Overview', 'Attendance', 'Grades', 'Results', 'Timetable'];
 
 const TEST_TYPE_ORDER = ['weekly', 'monthly', 'midterm', 'sendup', 'final', 'classtest'];

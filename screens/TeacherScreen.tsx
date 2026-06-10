@@ -25,7 +25,7 @@ import {
   ChartBarIcon,
 } from 'react-native-heroicons/outline';
 
-const SCHOOL_CODE = 'GHS-001';
+import {SCHOOL_CODE} from '../config';
 
 const TEST_TYPES = [
   {key: 'weekly', label: 'Weekly Test'},
@@ -97,7 +97,7 @@ export default function TeacherScreen({navigation}: any) {
         });
         setInchargeClasses(myInchargeClasses);
       }
-    } catch (e) {}
+    } catch (e) {console.log('❌ QUANTAIP Error:', e);}
   };
 
   // ── ATTENDANCE ──

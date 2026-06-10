@@ -20,7 +20,7 @@ import {
   ExclamationCircleIcon,
 } from 'react-native-heroicons/outline';
 
-const SCHOOL_CODE = 'GHS-001';
+import {SCHOOL_CODE} from '../config';
 const TABS = ['Overview', 'Attendance', 'Fee', 'Results', 'Notifications'];
 
 export default function ParentScreen({navigation}: any) {

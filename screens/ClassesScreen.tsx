@@ -20,7 +20,7 @@ import {
   CheckCircleIcon,
 } from 'react-native-heroicons/outline';
 
-const SCHOOL_CODE = 'GHS-001';
+import {SCHOOL_CODE} from '../config';
 
 const CLASS_HIERARCHY = [
   {category: 'Early Education', classes: ['Nursery', 'Prep', 'KG']},
@@ -49,7 +49,7 @@ export default function ClassesScreen() {
         .collection('schools').doc(SCHOOL_CODE)
         .collection('teachers').get();
       setTeachers(snap.docs.map(d => d.data()));
-    } catch (e) {}
+    } catch (e) {console.log('❌ QUANTAIP Error:', e);}
   };
 
   const loadSections = async (cls: string) => {

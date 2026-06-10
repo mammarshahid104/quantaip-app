@@ -21,7 +21,7 @@ import {
   UserIcon,
 } from 'react-native-heroicons/outline';
 
-const SCHOOL_CODE = 'GHS-001';
+import {SCHOOL_CODE} from '../config';
 
 const CLASS_HIERARCHY = [
   {category: 'Early Education', classes: ['Nursery', 'Prep', 'KG']},
@@ -84,7 +84,7 @@ export default function FeeScreen() {
         structure[d.id] = d.data().amount || 0;
       });
       setFeeStructure(structure);
-    } catch (e) {}
+    } catch (e) {console.log('❌ QUANTAIP Error:', e);}
   };
 
   const loadStudents = async () => {
