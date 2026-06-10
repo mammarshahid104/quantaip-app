@@ -89,10 +89,13 @@ function LoginScreen({navigation}: any) {
     try {
       const email = `${id.toLowerCase()}@quantaip.edu.pk`;
       await auth().signInWithEmailAndPassword(email, pass);
-      if (detectedRole === 'admin') navigation.navigate('Admin');
-      else if (detectedRole === 'teacher') navigation.navigate('Teacher');
-      else if (detectedRole === 'student') navigation.navigate('Student');
-      else if (detectedRole === 'parent') navigation.navigate('Parent');
+      const target =
+        detectedRole === 'admin' ? 'Admin' :
+        detectedRole === 'teacher' ? 'Teacher' :
+        detectedRole === 'student' ? 'Student' : 'Parent';
+      setId('');
+      setPass('');
+      navigation.reset({index: 0, routes: [{name: target}]});
     } catch (e: any) {
       setError('Invalid ID or password. Please try again.');
     } finally {
