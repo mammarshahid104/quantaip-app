@@ -24,11 +24,7 @@ const createAuthAccount = async (email: string, pass: string) => {
   try {
     secondary = firebase.app('USER_CREATOR');
   } catch (e) {
-    const opts = firebase.app().options;
-    secondary = await firebase.initializeApp(
-      {...opts, databaseURL: opts.databaseURL || `https://${opts.projectId}.firebaseio.com`},
-      'USER_CREATOR',
-    );
+    secondary = await firebase.initializeApp(firebase.app().options, 'USER_CREATOR');
   }
   await secondary.auth().createUserWithEmailAndPassword(email, pass);
   await secondary.auth().signOut();
@@ -202,7 +198,7 @@ export default function AdminScreen({navigation}: any) {
   const copyTTDayToOthers = () => {
     Alert.alert(
       'Copy Day',
-      `${ttDay}'s timetable to all other days? (Friday will keep its shorter timings)`,
+      `${ttDay} ka timetable baqi sab dinon par copy karein? (Friday ke times chhote rahenge)`,
       [
         {text: 'Cancel', style: 'cancel'},
         {text: 'Copy', onPress: () => {
@@ -224,7 +220,7 @@ export default function AdminScreen({navigation}: any) {
             });
             return copy;
           });
-          Alert.alert('Done ✅', `${ttDay} has been copied to all days.`);
+          Alert.alert('Done ✅', `${ttDay} sab dinon par copy ho gaya!`);
         }},
       ],
     );
@@ -241,7 +237,7 @@ export default function AdminScreen({navigation}: any) {
       Alert.alert('Saved ✅', `${ttClass} ka timetable save ho gaya!`);
     } catch (e) {
       console.log('❌ QUANTAIP Error:', e);
-      Alert.alert('Error', 'Could not save timetable. Please try again.');
+      Alert.alert('Error', 'Timetable save nahi hua. Dobara try karein.');
     } finally {
       setSavingTT(false);
     }
@@ -451,6 +447,19 @@ export default function AdminScreen({navigation}: any) {
         .collection('results').doc(resultId)
         .collection('students').doc(s.studentId);
       batch.set(ref, {...s, generatedAt: firestore.FieldValue.serverTimestamp()});
+      // DUAL-WRITE: student ke apne doc mein bhi result save karo (1-read pattern)
+      const sRef = firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('students').doc(s.studentId);
+      batch.set(sRef, {
+        resultsMap: {[resultId]: {
+          ...s,
+          resultId,
+          testType: resultTestType,
+          class: resultClass,
+          generatedDate: new Date().toISOString().split('T')[0],
+        }},
+      }, {merge: true});
     });
 
     // Save result metadata
@@ -855,7 +864,7 @@ export default function AdminScreen({navigation}: any) {
       {/* NAVBAR */}
       <View style={styles.navbar}>
         <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
-        <TouchableOpacity onPress={() => {auth().signOut(); navigation.reset({index: 0, routes: [{name: 'Login'}]});}}>
+        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>
@@ -1394,7 +1403,7 @@ export default function AdminScreen({navigation}: any) {
 
             {!ttClass && !loadingTT && (
               <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
-                Select a class above to begin
+                Upar se class select karein
               </Text>
             )}
           </View>

@@ -335,6 +335,25 @@ export default function TeacherScreen({navigation}: any) {
           testType,
           date: dateKey,
         });
+        // DUAL-WRITE: student ke apne doc mein bhi marks save karo
+        // taake Student/Parent portal sirf 1 read mein sab marks le sakein
+        const studentRef = firestore()
+          .collection('schools').doc(SCHOOL_CODE)
+          .collection('students').doc(s.id);
+        batch.set(studentRef, {
+          marksMap: {[testId]: {
+            testId,
+            typeName: TEST_TYPES.find(t => t.key === testType)?.label,
+            testType,
+            subject: teacher?.subject,
+            obtained,
+            total,
+            percentage,
+            grade,
+            class: selectedMarksClass,
+            date: dateKey,
+          }},
+        }, {merge: true});
       });
 
       await batch.commit();
@@ -379,7 +398,7 @@ export default function TeacherScreen({navigation}: any) {
           <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
           <Text style={styles.navSub}>TEACHER PANEL</Text>
         </View>
-        <TouchableOpacity onPress={() => {auth().signOut(); navigation.reset({index: 0, routes: [{name: 'Login'}]});}}>
+        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>

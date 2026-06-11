@@ -124,26 +124,17 @@ export default function ParentScreen({navigation}: any) {
     if (!student) return;
     setLoadingResults(true);
     try {
-      const resultsSnap = await firestore()
+      // NAYA TAREEQA: sirf 1 read — bachay ka doc, resultsMap ke saath
+      const doc = await firestore()
         .collection('schools').doc(SCHOOL_CODE)
-        .collection('results')
+        .collection('students').doc(student.id)
         .get();
-
-      const myResults: any[] = [];
-      for (const resultDoc of resultsSnap.docs) {
-        const resultData = resultDoc.data();
-        if (resultData.class !== student.class) continue;
-        const studentResult = await firestore()
-          .collection('schools').doc(SCHOOL_CODE)
-          .collection('results').doc(resultDoc.id)
-          .collection('students').doc(student.id)
-          .get();
-        if (studentResult.exists) {
-          myResults.push({...resultData, ...studentResult.data()});
-        }
-      }
-      setResults(myResults);
+      const map = doc.data()?.resultsMap || {};
+      const myResults = Object.values(map);
+      setResults(myResults.sort((a: any, b: any) =>
+        (b.generatedDate || '').localeCompare(a.generatedDate || '')));
     } catch (e) {
+      console.log('❌ QUANTAIP Error:', e);
     } finally {
       setLoadingResults(false);
     }
@@ -186,7 +177,7 @@ export default function ParentScreen({navigation}: any) {
           <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
           <Text style={styles.navSub}>PARENT PORTAL</Text>
         </View>
-        <TouchableOpacity onPress={() => {auth().signOut(); navigation.reset({index: 0, routes: [{name: 'Login'}]});}}>
+        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>

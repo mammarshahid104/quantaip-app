@@ -112,24 +112,14 @@ export default function StudentScreen({navigation}: any) {
     if (!student) return;
     setLoadingMarks(true);
     try {
-      const testsSnap = await firestore()
+      // NAYA TAREEQA: sirf 1 read — apna doc, marksMap ke saath
+      const doc = await firestore()
         .collection('schools').doc(SCHOOL_CODE)
-        .collection('marks')
+        .collection('students').doc(student.id)
         .get();
-      const allMarks: any[] = [];
-      for (const testDoc of testsSnap.docs) {
-        const testData = testDoc.data();
-        if (testData.class !== student.class) continue;
-        const studentMarkDoc = await firestore()
-          .collection('schools').doc(SCHOOL_CODE)
-          .collection('marks').doc(testDoc.id)
-          .collection('students').doc(student.id)
-          .get();
-        if (studentMarkDoc.exists) {
-          allMarks.push({...testData, ...studentMarkDoc.data()});
-        }
-      }
-      setMarks(allMarks.sort((a, b) => b.date?.localeCompare(a.date)));
+      const map = doc.data()?.marksMap || {};
+      const allMarks = Object.values(map);
+      setMarks(allMarks.sort((a: any, b: any) => b.date?.localeCompare(a.date)));
     } catch (e) {
       console.log('Marks error:', e);
     } finally {
@@ -141,25 +131,17 @@ export default function StudentScreen({navigation}: any) {
     if (!student) return;
     setLoadingResults(true);
     try {
-      const resultsSnap = await firestore()
+      // NAYA TAREEQA: sirf 1 read — apna doc, resultsMap ke saath
+      const doc = await firestore()
         .collection('schools').doc(SCHOOL_CODE)
-        .collection('results')
+        .collection('students').doc(student.id)
         .get();
-      const myResults: any[] = [];
-      for (const resultDoc of resultsSnap.docs) {
-        const resultData = resultDoc.data();
-        if (resultData.class !== student.class) continue;
-        const studentResult = await firestore()
-          .collection('schools').doc(SCHOOL_CODE)
-          .collection('results').doc(resultDoc.id)
-          .collection('students').doc(student.id)
-          .get();
-        if (studentResult.exists) {
-          myResults.push({...resultData, ...studentResult.data()});
-        }
-      }
-      setResults(myResults);
+      const map = doc.data()?.resultsMap || {};
+      const myResults = Object.values(map);
+      setResults(myResults.sort((a: any, b: any) =>
+        (b.generatedDate || '').localeCompare(a.generatedDate || '')));
     } catch (e) {
+      console.log('Results error:', e);
     } finally {
       setLoadingResults(false);
     }
@@ -213,7 +195,7 @@ export default function StudentScreen({navigation}: any) {
           <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
           <Text style={styles.navSub}>STUDENT PORTAL</Text>
         </View>
-        <TouchableOpacity onPress={() => {auth().signOut(); navigation.reset({index: 0, routes: [{name: 'Login'}]});}}>
+        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>
