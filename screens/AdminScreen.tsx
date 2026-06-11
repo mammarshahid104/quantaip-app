@@ -855,7 +855,7 @@ export default function AdminScreen({navigation}: any) {
       {/* NAVBAR */}
       <View style={styles.navbar}>
         <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
-        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
+        <TouchableOpacity onPress={() => {auth().signOut(); navigation.reset({index: 0, routes: [{name: 'Login'}]});}}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>
