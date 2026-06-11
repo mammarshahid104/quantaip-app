@@ -23,6 +23,7 @@ import {
   PencilSquareIcon,
   AcademicCapIcon,
   ChartBarIcon,
+  CalendarDaysIcon,
 } from 'react-native-heroicons/outline';
 
 import {SCHOOL_CODE} from '../config';
@@ -41,6 +42,31 @@ export default function TeacherScreen({navigation}: any) {
   const [classes, setClasses] = useState<string[]>([]);
   const [inchargeClasses, setInchargeClasses] = useState<string[]>([]);
   const [tab, setTab] = useState('My Classes');
+
+  // Timetable states
+  const [ttClass, setTtClass] = useState('');
+  const [ttData, setTtData] = useState<any>(null);
+  const [loadingTT, setLoadingTT] = useState(false);
+  const todayName = new Date().toLocaleDateString('en-US', {weekday: 'long'});
+  const [ttDay, setTtDay] = useState(todayName === 'Sunday' ? 'Monday' : todayName);
+
+  const loadTeacherTimetable = async (cls: string) => {
+    setTtClass(cls);
+    setLoadingTT(true);
+    try {
+      const doc = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('timetable').doc(cls)
+        .get();
+      const data = doc.data();
+      setTtData(data && data.Monday ? data : null);
+    } catch (e) {
+      console.log('❌ QUANTAIP Error:', e);
+      setTtData(null);
+    } finally {
+      setLoadingTT(false);
+    }
+  };
 
   // Attendance states
   const [selectedAttClass, setSelectedAttClass] = useState('');
@@ -273,6 +299,7 @@ export default function TeacherScreen({navigation}: any) {
   const TABS = [
     ...(inchargeClasses.length > 0 ? [{key: 'Attendance', icon: ClipboardDocumentCheckIcon}] : []),
     {key: 'Marks', icon: PencilSquareIcon},
+    {key: 'Timetable', icon: CalendarDaysIcon},
     {key: 'My Classes', icon: BookOpenIcon},
   ];
 
@@ -591,6 +618,95 @@ export default function TeacherScreen({navigation}: any) {
       )}
 
       {/* ── MY CLASSES TAB ── */}
+      {tab === 'Timetable' && (
+        <ScrollView style={styles.content}>
+          <Text style={styles.sectionTitle}>Class Timetable</Text>
+
+          {/* Class selector — only assigned classes */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
+            {classes.map((cls, i) => (
+              <TouchableOpacity key={i}
+                style={{
+                  paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
+                  backgroundColor: ttClass === cls ? '#059669' : '#ffffff',
+                  borderWidth: 1, borderColor: ttClass === cls ? '#059669' : '#ede9fe',
+                }}
+                onPress={() => loadTeacherTimetable(cls)}>
+                <Text style={{
+                  fontSize: 12, fontWeight: '600',
+                  color: ttClass === cls ? '#ffffff' : '#6b7280',
+                }}>{cls}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {ttClass ? (
+            <View>
+              {/* Day selector */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
+                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => (
+                  <TouchableOpacity key={i}
+                    style={{
+                      paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
+                      backgroundColor: ttDay === d ? '#1e1b4b' : '#ffffff',
+                      borderWidth: 1, borderColor: ttDay === d ? '#1e1b4b' : '#ede9fe',
+                    }}
+                    onPress={() => setTtDay(d)}>
+                    <Text style={{
+                      fontSize: 12, fontWeight: '600',
+                      color: ttDay === d ? '#ffffff' : '#6b7280',
+                    }}>{d.slice(0, 3)}{d === 'Friday' ? ' 🕌' : ''}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {loadingTT && <ActivityIndicator color="#059669" style={{marginVertical: 20}} />}
+
+              {!loadingTT && ttData && ttData[ttDay] ? (
+                ttData[ttDay].map((t: any, i: number) => {
+                  const isMine = t.teacher && teacher?.name &&
+                    t.teacher.toLowerCase().includes(teacher.name.toLowerCase());
+                  return (
+                    <View key={i} style={{
+                      backgroundColor: t.period === 0 ? '#f0fdf4' : isMine ? '#ecfdf5' : '#ffffff',
+                      borderRadius: 14, padding: 14, marginBottom: 8,
+                      borderWidth: isMine ? 1.5 : 1,
+                      borderColor: t.period === 0 ? '#bbf7d0' : isMine ? '#059669' : '#ede9fe',
+                      flexDirection: 'row', alignItems: 'center', gap: 12,
+                    }}>
+                      <View style={{minWidth: 90}}>
+                        <Text style={{fontSize: 11, fontWeight: '700', color: '#059669'}}>{t.time}</Text>
+                      </View>
+                      <View style={{flex: 1}}>
+                        <Text style={{
+                          fontSize: 14, fontWeight: '600',
+                          color: t.period === 0 ? '#16a34a' : '#1e1b4b',
+                        }}>{t.period === 0 ? '🍎 Break' : t.subject || '—'}</Text>
+                        {t.teacher ? (
+                          <Text style={{fontSize: 12, color: '#9ca3af', marginTop: 2}}>
+                            {t.teacher}{isMine ? '  ⭐ Your period' : ''}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })
+              ) : !loadingTT ? (
+                <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
+                  Timetable has not been set for this class yet.
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
+              Select a class above to view its timetable
+            </Text>
+          )}
+
+          <View style={{height: 30}} />
+        </ScrollView>
+      )}
+
       {tab === 'My Classes' && (
         <ScrollView style={styles.content}>
           <Text style={styles.sectionTitle}>Assigned Classes</Text>
