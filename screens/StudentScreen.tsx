@@ -43,6 +43,9 @@ export default function StudentScreen({navigation}: any) {
   const [loading, setLoading] = useState(true);
   const [loadingMarks, setLoadingMarks] = useState(false);
   const [loadingResults, setLoadingResults] = useState(false);
+  const [timetable, setTimetable] = useState<any>(null);
+  const todayName = new Date().toLocaleDateString('en-US', {weekday: 'long'});
+  const [ttDay, setTtDay] = useState(todayName === 'Sunday' ? 'Monday' : todayName);
 
   const today = new Date().toLocaleDateString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
@@ -62,11 +65,22 @@ export default function StudentScreen({navigation}: any) {
       if (doc.exists) {
         setStudent(doc.data());
         loadAttendance(doc.data());
+        loadTimetable(doc.data());
       }
     } catch (e) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadTimetable = async (studentData: any) => {
+    try {
+      const doc = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('timetable').doc(studentData?.class)
+        .get();
+      if (doc.exists) setTimetable(doc.data());
+    } catch (e) {console.log('❌ QUANTAIP Error:', e);}
   };
 
   const loadAttendance = (studentData: any) => {
@@ -167,17 +181,6 @@ export default function StudentScreen({navigation}: any) {
   const late = attendance.filter(a => a.status === 'L').length;
   const total = attendance.length;
   const attendancePct = total > 0 ? Math.round((present / total) * 100) : 0;
-
-  const TIMETABLE = [
-    {time: '08:00', subject: 'Mathematics', teacher: 'Mr. Qaiser', room: 'Rm 12'},
-    {time: '08:45', subject: 'English', teacher: 'Ms. Fatima', room: 'Rm 4'},
-    {time: '09:30', subject: 'Physics', teacher: 'Mr. Arif', room: 'Rm 7'},
-    {time: '10:15', subject: 'Break', teacher: '', room: ''},
-    {time: '10:30', subject: 'Urdu', teacher: 'Ms. Nadia', room: 'Rm 2'},
-    {time: '11:15', subject: 'Biology', teacher: 'Ms. Sana', room: 'Rm 9'},
-    {time: '12:00', subject: 'Lunch', teacher: '', room: ''},
-    {time: '12:45', subject: 'Pak Studies', teacher: 'Mr. Bilal', room: 'Rm 5'},
-  ];
 
   if (loading) {
     return (
@@ -489,23 +492,48 @@ export default function StudentScreen({navigation}: any) {
         {/* TIMETABLE */}
         {tab === 'Timetable' && (
           <View>
-            <Text style={styles.ttDay}>Today — {today}</Text>
-            {TIMETABLE.map((t, i) => (
-              <View key={i} style={[
-                styles.ttCard,
-                (t.subject === 'Break' || t.subject === 'Lunch') && styles.ttBreak,
-              ]}>
-                <View style={styles.ttTimeCol}>
-                  <Text style={styles.ttTime}>{t.time}</Text>
+            {/* Day selector */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
+              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => (
+                <TouchableOpacity key={i}
+                  style={{
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
+                    backgroundColor: ttDay === d ? '#7c3aed' : '#ffffff',
+                    borderWidth: 1, borderColor: ttDay === d ? '#7c3aed' : '#ede9fe',
+                  }}
+                  onPress={() => setTtDay(d)}>
+                  <Text style={{
+                    fontSize: 12, fontWeight: '600',
+                    color: ttDay === d ? '#ffffff' : '#6b7280',
+                  }}>{d.slice(0, 3)}{d === 'Friday' ? ' 🕌' : ''}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.ttDay}>{ttDay}{ttDay === todayName ? ' — Today' : ''}</Text>
+
+            {timetable && timetable[ttDay] ? (
+              timetable[ttDay].map((t: any, i: number) => (
+                <View key={i} style={[
+                  styles.ttCard,
+                  t.period === 0 && styles.ttBreak,
+                ]}>
+                  <View style={styles.ttTimeCol}>
+                    <Text style={styles.ttTime}>{t.time}</Text>
+                  </View>
+                  <View style={styles.ttBody}>
+                    <Text style={[styles.ttSubject,
+                      t.period === 0 && {color: '#16a34a'},
+                    ]}>{t.period === 0 ? '🍎 Break' : t.subject || '—'}</Text>
+                    {t.teacher ? <Text style={styles.ttMeta}>{t.teacher}</Text> : null}
+                  </View>
                 </View>
-                <View style={styles.ttBody}>
-                  <Text style={[styles.ttSubject,
-                    (t.subject === 'Break' || t.subject === 'Lunch') && {color: '#9ca3af'}
-                  ]}>{t.subject}</Text>
-                  {t.teacher ? <Text style={styles.ttMeta}>{t.teacher} · {t.room}</Text> : null}
-                </View>
-              </View>
-            ))}
+              ))
+            ) : (
+              <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
+                Timetable abhi set nahi hua. Admin se rabta karein.
+              </Text>
+            )}
           </View>
         )}
 

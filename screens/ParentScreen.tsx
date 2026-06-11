@@ -21,7 +21,7 @@ import {
 } from 'react-native-heroicons/outline';
 
 import {SCHOOL_CODE} from '../config';
-const TABS = ['Overview', 'Attendance', 'Fee', 'Results', 'Notifications'];
+const TABS = ['Overview', 'Attendance', 'Timetable', 'Fee', 'Results', 'Notifications'];
 
 export default function ParentScreen({navigation}: any) {
   const [tab, setTab] = useState('Overview');
@@ -33,6 +33,9 @@ export default function ParentScreen({navigation}: any) {
   const [loading, setLoading] = useState(true);
   const [results, setResults] = useState<any[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
+  const [timetable, setTimetable] = useState<any>(null);
+  const todayName = new Date().toLocaleDateString('en-US', {weekday: 'long'});
+  const [ttDay, setTtDay] = useState(todayName === 'Sunday' ? 'Monday' : todayName);
 
   const month = new Date().toLocaleString('default', {month: 'long', year: 'numeric'});
 
@@ -88,6 +91,15 @@ export default function ParentScreen({navigation}: any) {
               .collection('feeStructure').doc(studentData?.class)
               .get();
             setFeeStructure(feeStructDoc.exists ? feeStructDoc.data()?.amount || 0 : 0);
+
+            // Timetable (1 read — bachay ki class ka)
+            try {
+              const ttDoc = await firestore()
+                .collection('schools').doc(SCHOOL_CODE)
+                .collection('timetable').doc(studentData?.class)
+                .get();
+              if (ttDoc.exists) setTimetable(ttDoc.data());
+            } catch (e) {console.log('❌ QUANTAIP Error:', e);}
           }
         }
       }
@@ -293,6 +305,59 @@ export default function ParentScreen({navigation}: any) {
         )}
 
         {/* FEE */}
+        {tab === 'Timetable' && (
+          <View>
+            {/* Day selector */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
+              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d, i) => (
+                <TouchableOpacity key={i}
+                  style={{
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
+                    backgroundColor: ttDay === d ? '#9333ea' : '#ffffff',
+                    borderWidth: 1, borderColor: ttDay === d ? '#9333ea' : '#ede9fe',
+                  }}
+                  onPress={() => setTtDay(d)}>
+                  <Text style={{
+                    fontSize: 12, fontWeight: '600',
+                    color: ttDay === d ? '#ffffff' : '#6b7280',
+                  }}>{d.slice(0, 3)}{d === 'Friday' ? ' 🕌' : ''}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.sectionTitle}>
+              {student?.fullName || student?.name} — {ttDay}{ttDay === todayName ? ' (Today)' : ''}
+            </Text>
+
+            {timetable && timetable[ttDay] ? (
+              timetable[ttDay].map((t: any, i: number) => (
+                <View key={i} style={[
+                  styles.card,
+                  {marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12},
+                  t.period === 0 && {backgroundColor: '#f0fdf4', borderColor: '#bbf7d0'},
+                ]}>
+                  <View style={{minWidth: 90}}>
+                    <Text style={{fontSize: 11, fontWeight: '700', color: '#9333ea'}}>{t.time}</Text>
+                  </View>
+                  <View style={{flex: 1}}>
+                    <Text style={{
+                      fontSize: 14, fontWeight: '600',
+                      color: t.period === 0 ? '#16a34a' : '#1e1b4b',
+                    }}>{t.period === 0 ? '🍎 Break' : t.subject || '—'}</Text>
+                    {t.teacher ? (
+                      <Text style={{fontSize: 12, color: '#9ca3af', marginTop: 2}}>{t.teacher}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              ))
+            ) : (
+              <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
+                Timetable abhi set nahi hua.
+              </Text>
+            )}
+          </View>
+        )}
+
         {tab === 'Fee' && (
           <View>
             <Text style={styles.sectionTitle}>Fee Status — {month}</Text>

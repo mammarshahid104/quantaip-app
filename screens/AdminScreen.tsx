@@ -32,6 +32,8 @@ import {
   KeyIcon,
   PencilSquareIcon,
   TrophyIcon,
+  CalendarDaysIcon,
+  DocumentDuplicateIcon,
 } from 'react-native-heroicons/outline';
 import ClassesScreen from './ClassesScreen';
 import FeeScreen from './FeeScreen';
@@ -66,8 +68,47 @@ const TABS = [
   {key: 'Teachers', icon: AcademicCapIcon},
   {key: 'Fee', icon: BanknotesIcon},
   {key: 'Results', icon: TrophyIcon},
+  {key: 'Timetable', icon: CalendarDaysIcon},
   {key: 'Import', icon: ArrowUpTrayIcon},
 ];
+
+// ============ TIMETABLE CONSTANTS ============
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// Default day template: 7 periods + 1 break
+// Friday = half day, chote periods (Jumma ki wajah se)
+const makeDefaultDay = (isFriday: boolean) => {
+  if (isFriday) {
+    return [
+      {period: 1, subject: '', teacher: '', time: '8:00 - 8:30'},
+      {period: 2, subject: '', teacher: '', time: '8:30 - 9:00'},
+      {period: 3, subject: '', teacher: '', time: '9:00 - 9:30'},
+      {period: 0, subject: 'BREAK', teacher: '', time: '9:30 - 9:50'},
+      {period: 4, subject: '', teacher: '', time: '9:50 - 10:20'},
+      {period: 5, subject: '', teacher: '', time: '10:20 - 10:50'},
+      {period: 6, subject: '', teacher: '', time: '10:50 - 11:20'},
+      {period: 7, subject: '', teacher: '', time: '11:20 - 11:50'},
+    ];
+  }
+  return [
+    {period: 1, subject: '', teacher: '', time: '8:00 - 8:40'},
+    {period: 2, subject: '', teacher: '', time: '8:40 - 9:20'},
+    {period: 3, subject: '', teacher: '', time: '9:20 - 10:00'},
+    {period: 0, subject: 'BREAK', teacher: '', time: '10:00 - 10:30'},
+    {period: 4, subject: '', teacher: '', time: '10:30 - 11:10'},
+    {period: 5, subject: '', teacher: '', time: '11:10 - 11:50'},
+    {period: 6, subject: '', teacher: '', time: '11:50 - 12:30'},
+    {period: 7, subject: '', teacher: '', time: '12:30 - 1:10'},
+  ];
+};
+
+const makeDefaultWeek = () => {
+  const week: any = {};
+  DAYS.forEach(d => {
+    week[d] = makeDefaultDay(d === 'Friday');
+  });
+  return week;
+};
 
 export default function AdminScreen({navigation}: any) {
   const [tab, setTab] = useState('Dashboard');
@@ -99,6 +140,91 @@ export default function AdminScreen({navigation}: any) {
   // Student sub tab
   const [studentTab, setStudentTab] = useState('List');
   const [teacherTab, setTeacherTab] = useState('List');
+
+  // Timetable states
+  const [ttClass, setTtClass] = useState('');
+  const [ttDay, setTtDay] = useState('Monday');
+  const [ttData, setTtData] = useState<any>(null);
+  const [loadingTT, setLoadingTT] = useState(false);
+  const [savingTT, setSavingTT] = useState(false);
+
+  // ============ TIMETABLE FUNCTIONS ============
+  const loadTimetable = async (cls: string) => {
+    setTtClass(cls);
+    setTtDay('Monday');
+    setLoadingTT(true);
+    try {
+      const doc = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('timetable').doc(cls)
+        .get();
+      const data = doc.data();
+      setTtData(data && data.Monday ? data : makeDefaultWeek());
+    } catch (e) {
+      console.log('❌ QUANTAIP Error:', e);
+      setTtData(makeDefaultWeek());
+    } finally {
+      setLoadingTT(false);
+    }
+  };
+
+  const updateTTSlot = (index: number, field: string, value: string) => {
+    setTtData((prev: any) => {
+      const copy = {...prev};
+      const daySlots = [...copy[ttDay]];
+      daySlots[index] = {...daySlots[index], [field]: value};
+      copy[ttDay] = daySlots;
+      return copy;
+    });
+  };
+
+  const copyTTDayToOthers = () => {
+    Alert.alert(
+      'Copy Day',
+      `${ttDay} ka timetable baqi sab dinon par copy karein? (Friday ke times chhote rahenge)`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {text: 'Copy', onPress: () => {
+          setTtData((prev: any) => {
+            const copy = {...prev};
+            const source = copy[ttDay];
+            DAYS.forEach(d => {
+              if (d === ttDay) return;
+              if (d === 'Friday') {
+                // Friday: subjects/teachers copy, times Friday wale (chote) rakhe
+                const fridayTimes = makeDefaultDay(true);
+                copy[d] = source.map((slot: any, i: number) => ({
+                  ...slot,
+                  time: fridayTimes[i]?.time || slot.time,
+                }));
+              } else {
+                copy[d] = source.map((slot: any) => ({...slot}));
+              }
+            });
+            return copy;
+          });
+          Alert.alert('Done ✅', `${ttDay} sab dinon par copy ho gaya!`);
+        }},
+      ],
+    );
+  };
+
+  const saveTimetable = async () => {
+    if (!ttClass || !ttData) return;
+    setSavingTT(true);
+    try {
+      await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('timetable').doc(ttClass)
+        .set(ttData);
+      Alert.alert('Saved ✅', `${ttClass} ka timetable save ho gaya!`);
+    } catch (e) {
+      console.log('❌ QUANTAIP Error:', e);
+      Alert.alert('Error', 'Timetable save nahi hua. Dobara try karein.');
+    } finally {
+      setSavingTT(false);
+    }
+  };
 
   // Add Student form
   const [sName, setSName] = useState('');
@@ -708,7 +834,7 @@ export default function AdminScreen({navigation}: any) {
       {/* NAVBAR */}
       <View style={styles.navbar}>
         <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
-        <TouchableOpacity onPress={() => {auth().signOut(); navigation.reset({index: 0, routes: [{name: 'Login'}]});}}>
+        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>
@@ -1130,6 +1256,128 @@ export default function AdminScreen({navigation}: any) {
     )}
   </View>
 )}
+
+        {/* TIMETABLE */}
+        {tab === 'Timetable' && (
+          <View>
+            <Text style={styles.sectionTitle}>Class Timetable</Text>
+
+            {/* Class selector */}
+            <Text style={styles.fieldLabel}>SELECT CLASS</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
+              {ALL_CLASSES.map((cls, i) => (
+                <TouchableOpacity key={i}
+                  style={[styles.clsChip, ttClass === cls && styles.clsChipOn]}
+                  onPress={() => loadTimetable(cls)}>
+                  <Text style={[styles.clsChipTxt, ttClass === cls && styles.clsChipTxtOn]}>{cls}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {loadingTT && <ActivityIndicator color="#7c3aed" style={{marginVertical: 20}} />}
+
+            {ttClass && ttData && !loadingTT && (
+              <View>
+                {/* Day selector */}
+                <Text style={styles.fieldLabel}>DAY</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
+                  {DAYS.map((d, i) => (
+                    <TouchableOpacity key={i}
+                      style={[styles.clsChip, ttDay === d && styles.clsChipOn]}
+                      onPress={() => setTtDay(d)}>
+                      <Text style={[styles.clsChipTxt, ttDay === d && styles.clsChipTxtOn]}>
+                        {d}{d === 'Friday' ? ' 🕌' : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                {/* Slot editor */}
+                {ttData[ttDay]?.map((slot: any, i: number) => (
+                  <View key={i} style={[
+                    styles.card,
+                    {marginBottom: 8},
+                    slot.period === 0 && {backgroundColor: '#f0fdf4', borderColor: '#bbf7d0'},
+                  ]}>
+                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                      <View style={{
+                        width: 30, height: 30, borderRadius: 15,
+                        backgroundColor: slot.period === 0 ? '#dcfce7' : '#f5f3ff',
+                        alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <Text style={{fontSize: 12, fontWeight: '700', color: slot.period === 0 ? '#16a34a' : '#7c3aed'}}>
+                          {slot.period === 0 ? '🍎' : slot.period}
+                        </Text>
+                      </View>
+                      <TextInput
+                        style={{
+                          flex: 1, borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
+                          paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#1e1b4b',
+                        }}
+                        placeholder="Time (e.g. 8:00 - 8:40)"
+                        placeholderTextColor="#c4b5fd"
+                        value={slot.time}
+                        onChangeText={t => updateTTSlot(i, 'time', t)}
+                      />
+                    </View>
+                    {slot.period !== 0 && (
+                      <View style={{flexDirection: 'row', gap: 8, marginTop: 8}}>
+                        <TextInput
+                          style={{
+                            flex: 1, borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
+                            paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#1e1b4b',
+                          }}
+                          placeholder="Subject"
+                          placeholderTextColor="#c4b5fd"
+                          value={slot.subject}
+                          onChangeText={t => updateTTSlot(i, 'subject', t)}
+                        />
+                        <TextInput
+                          style={{
+                            flex: 1, borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
+                            paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#1e1b4b',
+                          }}
+                          placeholder="Teacher"
+                          placeholderTextColor="#c4b5fd"
+                          value={slot.teacher}
+                          onChangeText={t => updateTTSlot(i, 'teacher', t)}
+                        />
+                      </View>
+                    )}
+                  </View>
+                ))}
+
+                {/* Copy day button */}
+                <TouchableOpacity
+                  style={[styles.addBtn, {backgroundColor: '#0891b2', marginBottom: 10}]}
+                  onPress={copyTTDayToOthers}>
+                  <View style={styles.btnInner}>
+                    <DocumentDuplicateIcon size={18} color="#ffffff" />
+                    <Text style={styles.addBtnTxt}>Copy {ttDay} to All Days</Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Save button */}
+                <TouchableOpacity
+                  style={styles.addBtn}
+                  disabled={savingTT}
+                  onPress={saveTimetable}>
+                  {savingTT ? <ActivityIndicator color="#ffffff" /> :
+                    <View style={styles.btnInner}>
+                      <CalendarDaysIcon size={18} color="#ffffff" />
+                      <Text style={styles.addBtnTxt}>Save Timetable — {ttClass}</Text>
+                    </View>}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {!ttClass && !loadingTT && (
+              <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
+                Upar se class select karein
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* FEE */}
         {tab === 'Fee' && <FeeScreen />}
