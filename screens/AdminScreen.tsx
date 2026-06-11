@@ -86,8 +86,39 @@ const TABS = [
   {key: 'Fee', icon: BanknotesIcon},
   {key: 'Results', icon: TrophyIcon},
   {key: 'Timetable', icon: CalendarDaysIcon},
+  {key: 'Reports', icon: ChartBarIcon},
   {key: 'Import', icon: ArrowUpTrayIcon},
 ];
+
+// ============ REPORTS HELPERS ============
+// Pichle 6 mahine ki list banao (current month pehle)
+const getLast6Months = (): {label: string; prefix: string}[] => {
+  const months = [];
+  const now = new Date();
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const label = d.toLocaleString('default', {month: 'short', year: 'numeric'});
+    const prefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    months.push({label, prefix});
+  }
+  return months;
+};
+
+// attendanceMap se ek mahine ki stats nikalo
+// Late (L) = Present ke barabar count hota hai percentage mein
+const calcMonthStats = (attendanceMap: any, monthPrefix: string) => {
+  let present = 0, absent = 0, late = 0;
+  Object.keys(attendanceMap || {}).forEach(date => {
+    if (!date.startsWith(monthPrefix)) return;
+    const s = attendanceMap[date];
+    if (s === 'P') present++;
+    else if (s === 'A') absent++;
+    else if (s === 'L') late++;
+  });
+  const total = present + absent + late;
+  const pct = total > 0 ? Math.round(((present + late) / total) * 100) : -1;
+  return {present, absent, late, total, pct};
+};
 
 // ============ TIMETABLE CONSTANTS ============
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -164,6 +195,16 @@ export default function AdminScreen({navigation}: any) {
   const [ttData, setTtData] = useState<any>(null);
   const [loadingTT, setLoadingTT] = useState(false);
   const [savingTT, setSavingTT] = useState(false);
+
+  // Reports states
+  const MONTH_LIST = getLast6Months();
+  const [reportMonth, setReportMonth] = useState(MONTH_LIST[0].prefix);
+  const [reportStudents, setReportStudents] = useState<any[]>([]);
+  const [reportTeachers, setReportTeachers] = useState<any[]>([]);
+  const [loadingReport, setLoadingReport] = useState(false);
+  // teacherAttendance: {teacherId: 'P'|'A'} — aaj ki haazri
+  const [teacherAtt, setTeacherAtt] = useState<{[id: string]: string}>({});
+  const [savingTeacherAtt, setSavingTeacherAtt] = useState(false);
 
   // ============ TIMETABLE FUNCTIONS ============
   const loadTimetable = async (cls: string) => {
@@ -302,7 +343,58 @@ export default function AdminScreen({navigation}: any) {
   useEffect(() => {
     if (tab === 'Students') loadStudents();
     if (tab === 'Teachers') loadTeachers();
+    if (tab === 'Reports') loadReportData();
   }, [tab]);
+
+  // Jab month change ho tab bhi reload karo
+  useEffect(() => {
+    if (tab === 'Reports') loadReportData();
+  }, [reportMonth]);
+
+  // ============ REPORTS FUNCTIONS ============
+  const loadReportData = async () => {
+    setLoadingReport(true);
+    try {
+      // Ek baar students aur teachers dono load karo
+      const [sSnap, tSnap] = await Promise.all([
+        firestore().collection('schools').doc(SCHOOL_CODE).collection('students').get(),
+        firestore().collection('schools').doc(SCHOOL_CODE).collection('teachers').get(),
+      ]);
+      setReportStudents(sSnap.docs.map(d => d.data()));
+      setReportTeachers(tSnap.docs.map(d => d.data()));
+    } catch (e) {
+      console.log('❌ QUANTAIP Error:', e);
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
+  const saveTeacherAttendance = async () => {
+    const dateKey = new Date().toISOString().split('T')[0];
+    const unmarked = reportTeachers.filter(t => !teacherAtt[t.id]);
+    if (unmarked.length > 0) {
+      Alert.alert('Incomplete', `${unmarked.length} teacher(s) not marked yet.`);
+      return;
+    }
+    setSavingTeacherAtt(true);
+    try {
+      const batch = firestore().batch();
+      reportTeachers.forEach(t => {
+        const status = teacherAtt[t.id];
+        if (!status) return;
+        const ref = firestore()
+          .collection('schools').doc(SCHOOL_CODE)
+          .collection('teachers').doc(t.id);
+        batch.set(ref, {attendanceMap: {[dateKey]: status}}, {merge: true});
+      });
+      await batch.commit();
+      Alert.alert('Saved ✅', 'Teacher attendance recorded for today.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSavingTeacherAtt(false);
+    }
+  };
 
   const STAT_CARDS = [
     {val: stats.students.toString(), lbl: 'Students', color: '#7c3aed', bg: '#f5f3ff', Icon: UserGroupIcon},
@@ -1412,6 +1504,222 @@ export default function AdminScreen({navigation}: any) {
         {/* FEE */}
         {tab === 'Fee' && <FeeScreen />}
 
+        {/* REPORTS */}
+        {tab === 'Reports' && (() => {
+          // Client-side compute karo selected month ke liye
+          const studentsWithData = reportStudents.filter(s => {
+            const {total} = calcMonthStats(s.attendanceMap, reportMonth);
+            return total > 0;
+          });
+
+          // Overall summary
+          let totalPresent = 0, totalAbsent = 0, totalLate = 0;
+          studentsWithData.forEach(s => {
+            const {present, absent, late} = calcMonthStats(s.attendanceMap, reportMonth);
+            totalPresent += present; totalAbsent += absent; totalLate += late;
+          });
+          const grandTotal = totalPresent + totalAbsent + totalLate;
+          const overallPct = grandTotal > 0
+            ? Math.round(((totalPresent + totalLate) / grandTotal) * 100) : 0;
+
+          // Class-wise breakdown
+          const classStats = ALL_CLASSES.map(cls => {
+            const clsStudents = studentsWithData.filter(s => s.class === cls);
+            if (clsStudents.length === 0) return null;
+            let p = 0, a = 0, l = 0;
+            clsStudents.forEach(s => {
+              const st = calcMonthStats(s.attendanceMap, reportMonth);
+              p += st.present; a += st.absent; l += st.late;
+            });
+            const tot = p + a + l;
+            const pct = tot > 0 ? Math.round(((p + l) / tot) * 100) : 0;
+            return {cls, pct, students: clsStudents.length};
+          }).filter(Boolean) as {cls: string; pct: number; students: number}[];
+
+          // At-risk: sirf students jinki pct < 75, data wale
+          const atRisk = studentsWithData
+            .map(s => ({...s, _pct: calcMonthStats(s.attendanceMap, reportMonth).pct}))
+            .filter(s => s._pct >= 0 && s._pct < 75)
+            .sort((a, b) => a._pct - b._pct);
+
+          // Teacher monthly stats
+          const todayKey = new Date().toISOString().split('T')[0];
+          const selectedMonthLabel = MONTH_LIST.find(m => m.prefix === reportMonth)?.label || '';
+
+          return (
+            <View>
+              <Text style={styles.sectionTitle}>Attendance Reports</Text>
+
+              {/* Month selector */}
+              <Text style={styles.fieldLabel}>SELECT MONTH</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 16}}>
+                {MONTH_LIST.map((m, i) => (
+                  <TouchableOpacity key={i}
+                    style={[styles.clsChip, reportMonth === m.prefix && styles.clsChipOn]}
+                    onPress={() => setReportMonth(m.prefix)}>
+                    <Text style={[styles.clsChipTxt, reportMonth === m.prefix && styles.clsChipTxtOn]}>
+                      {m.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {loadingReport ? (
+                <ActivityIndicator color="#7c3aed" size="large" style={{marginVertical: 30}} />
+              ) : (
+                <View>
+                  {/* ── SUMMARY CARDS ── */}
+                  <View style={styles.rptSummaryRow}>
+                    <View style={[styles.rptSummaryCard, {backgroundColor: '#f5f3ff', borderColor: '#c4b5fd'}]}>
+                      <Text style={[styles.rptSummaryVal, {color: '#7c3aed'}]}>{overallPct}%</Text>
+                      <Text style={styles.rptSummaryLbl}>Overall</Text>
+                    </View>
+                    <View style={[styles.rptSummaryCard, {backgroundColor: '#f0fdf4', borderColor: '#86efac'}]}>
+                      <Text style={[styles.rptSummaryVal, {color: '#16a34a'}]}>{totalPresent + totalLate}</Text>
+                      <Text style={styles.rptSummaryLbl}>Present</Text>
+                    </View>
+                    <View style={[styles.rptSummaryCard, {backgroundColor: '#fef2f2', borderColor: '#fca5a5'}]}>
+                      <Text style={[styles.rptSummaryVal, {color: '#ef4444'}]}>{totalAbsent}</Text>
+                      <Text style={styles.rptSummaryLbl}>Absent</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.rptNote}>* Late counts as Present in all percentage calculations.</Text>
+
+                  {/* ── CLASS-WISE BREAKDOWN ── */}
+                  <Text style={[styles.sectionTitle, {marginTop: 18}]}>Class-wise Breakdown</Text>
+                  {classStats.length === 0 ? (
+                    <View style={styles.emptyBox}>
+                      <Text style={styles.emptyTxt}>No data for {selectedMonthLabel}</Text>
+                    </View>
+                  ) : (
+                    classStats.map((row, i) => {
+                      const low = row.pct < 75;
+                      const barColor = row.pct >= 75 ? '#7c3aed' : row.pct >= 60 ? '#f59e0b' : '#ef4444';
+                      return (
+                        <View key={i} style={[styles.rptClassRow, low && {borderColor: '#fde68a', backgroundColor: '#fffbeb'}]}>
+                          <View style={styles.rptClassTop}>
+                            <Text style={styles.rptClassName}>{row.cls}</Text>
+                            <Text style={[styles.rptClassPct, {color: barColor}]}>{row.pct}%</Text>
+                          </View>
+                          <View style={styles.rptBarBg}>
+                            <View style={[styles.rptBarFill, {width: `${row.pct}%`, backgroundColor: barColor}]} />
+                          </View>
+                          <Text style={styles.rptClassMeta}>{row.students} student{row.students !== 1 ? 's' : ''} with data</Text>
+                        </View>
+                      );
+                    })
+                  )}
+
+                  {/* ── AT-RISK STUDENTS ── */}
+                  <Text style={[styles.sectionTitle, {marginTop: 18}]}>At-Risk Students</Text>
+                  <Text style={styles.rptNote}>Students below 75% attendance for {selectedMonthLabel}</Text>
+                  {atRisk.length === 0 ? (
+                    <View style={[styles.rptEmptyGreen]}>
+                      <Text style={styles.rptEmptyGreenTxt}>✅ All students are above 75% this month.</Text>
+                    </View>
+                  ) : (
+                    atRisk.map((s, i) => (
+                      <View key={i} style={styles.rptAtRiskCard}>
+                        <View style={styles.studentAv}>
+                          <Text style={[styles.studentAvTxt, {color: '#ef4444'}]}>
+                            {(s.fullName || s.name || '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                          </Text>
+                        </View>
+                        <View style={{flex: 1}}>
+                          <Text style={styles.studentName}>{s.fullName || s.name}</Text>
+                          <Text style={styles.studentMeta}>{s.class}{s.section ? ` — ${s.section}` : ''}</Text>
+                        </View>
+                        <View style={styles.rptAtRiskBadge}>
+                          <Text style={styles.rptAtRiskPct}>{s._pct}%</Text>
+                        </View>
+                      </View>
+                    ))
+                  )}
+
+                  {/* ── TEACHER ATTENDANCE — TODAY ── */}
+                  <Text style={[styles.sectionTitle, {marginTop: 24}]}>Teacher Attendance — Today</Text>
+                  <Text style={styles.rptNote}>{todayKey}</Text>
+                  {reportTeachers.length === 0 ? (
+                    <View style={styles.emptyBox}>
+                      <Text style={styles.emptyTxt}>No teachers found</Text>
+                    </View>
+                  ) : (
+                    <View>
+                      {reportTeachers.map((t, i) => {
+                        const status = teacherAtt[t.id];
+                        return (
+                          <View key={i} style={styles.rptTeacherRow}>
+                            <View style={[styles.studentAv, {borderColor: '#0891b2'}]}>
+                              <Text style={[styles.studentAvTxt, {color: '#0891b2'}]}>
+                                {(t.name || '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                              </Text>
+                            </View>
+                            <View style={{flex: 1}}>
+                              <Text style={styles.studentName}>{t.name}</Text>
+                              <Text style={styles.studentMeta}>{t.subject}</Text>
+                            </View>
+                            <View style={styles.rptAttBtnGroup}>
+                              {(['P', 'A'] as const).map(btn => (
+                                <TouchableOpacity key={btn}
+                                  style={[styles.rptAttBtn,
+                                    status === btn && (btn === 'P' ? styles.rptAttBtnPOn : styles.rptAttBtnAOn),
+                                  ]}
+                                  onPress={() => setTeacherAtt(prev => ({...prev, [t.id]: btn}))}>
+                                  <Text style={[styles.rptAttBtnTxt,
+                                    status === btn && {color: btn === 'P' ? '#16a34a' : '#ef4444', fontWeight: '700'},
+                                  ]}>{btn}</Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          </View>
+                        );
+                      })}
+                      <TouchableOpacity
+                        style={[styles.addBtn, {marginBottom: 8}]}
+                        onPress={saveTeacherAttendance}
+                        disabled={savingTeacherAtt}>
+                        {savingTeacherAtt
+                          ? <ActivityIndicator color="#ffffff" />
+                          : <Text style={styles.addBtnTxt}>Save Teacher Attendance</Text>}
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* ── TEACHER MONTHLY ATTENDANCE ── */}
+                  <Text style={[styles.sectionTitle, {marginTop: 18}]}>Teacher Monthly Attendance</Text>
+                  <Text style={styles.rptNote}>{selectedMonthLabel} · P/A only (Late rule does not apply)</Text>
+                  {reportTeachers.map((t, i) => {
+                    const map = t.attendanceMap || {};
+                    let tp = 0, ta = 0;
+                    Object.keys(map).forEach(d => {
+                      if (!d.startsWith(reportMonth)) return;
+                      if (map[d] === 'P') tp++;
+                      else if (map[d] === 'A') ta++;
+                    });
+                    const tot = tp + ta;
+                    if (tot === 0) return null;
+                    const pct = Math.round((tp / tot) * 100);
+                    const barColor = pct >= 75 ? '#0891b2' : pct >= 60 ? '#f59e0b' : '#ef4444';
+                    return (
+                      <View key={i} style={styles.rptClassRow}>
+                        <View style={styles.rptClassTop}>
+                          <Text style={styles.rptClassName}>{t.name}</Text>
+                          <Text style={[styles.rptClassPct, {color: barColor}]}>{pct}%</Text>
+                        </View>
+                        <View style={styles.rptBarBg}>
+                          <View style={[styles.rptBarFill, {width: `${pct}%`, backgroundColor: barColor}]} />
+                        </View>
+                        <Text style={styles.rptClassMeta}>{tp}P / {ta}A this month</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+              <View style={{height: 30}} />
+            </View>
+          );
+        })()}
+
         {/* IMPORT */}
         {tab === 'Import' && (
           <View>
@@ -1580,4 +1888,50 @@ const styles = StyleSheet.create({
   classChipTxtOn: {color: '#7c3aed', fontWeight: '700'},
   selectedCount: {backgroundColor: '#f5f3ff', borderRadius: 8, padding: 10, marginTop: 8, marginBottom: 8, alignItems: 'center'},
   selectedCountTxt: {fontSize: 13, color: '#7c3aed', fontWeight: '600'},
+
+  // ── REPORTS STYLES ──
+  rptSummaryRow: {flexDirection: 'row', gap: 10, marginBottom: 6},
+  rptSummaryCard: {flex: 1, borderRadius: 12, padding: 14, borderWidth: 1, alignItems: 'center', gap: 4},
+  rptSummaryVal: {fontSize: 24, fontWeight: '700'},
+  rptSummaryLbl: {fontSize: 11, color: '#6b7280', fontWeight: '500'},
+  rptNote: {fontSize: 11, color: '#9ca3af', marginBottom: 10, lineHeight: 16},
+  rptClassRow: {
+    backgroundColor: '#ffffff', borderRadius: 12, padding: 14,
+    marginBottom: 8, borderWidth: 1, borderColor: '#ede9fe',
+  },
+  rptClassTop: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8},
+  rptClassName: {fontSize: 13, fontWeight: '600', color: '#1e1b4b'},
+  rptClassPct: {fontSize: 14, fontWeight: '700'},
+  rptBarBg: {height: 6, backgroundColor: '#f3f4f6', borderRadius: 3, overflow: 'hidden', marginBottom: 6},
+  rptBarFill: {height: 6, borderRadius: 3},
+  rptClassMeta: {fontSize: 11, color: '#9ca3af'},
+  rptAtRiskCard: {
+    backgroundColor: '#fff5f5', borderRadius: 10, padding: 12,
+    marginBottom: 6, borderWidth: 1, borderColor: '#fca5a5',
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+  },
+  rptAtRiskBadge: {
+    backgroundColor: '#fef2f2', borderRadius: 8, paddingHorizontal: 10,
+    paddingVertical: 6, borderWidth: 1, borderColor: '#fca5a5',
+  },
+  rptAtRiskPct: {fontSize: 14, fontWeight: '700', color: '#ef4444'},
+  rptEmptyGreen: {
+    backgroundColor: '#f0fdf4', borderRadius: 12, padding: 16,
+    borderWidth: 1, borderColor: '#86efac', alignItems: 'center', marginBottom: 12,
+  },
+  rptEmptyGreenTxt: {fontSize: 13, color: '#16a34a', fontWeight: '600'},
+  rptTeacherRow: {
+    backgroundColor: '#ffffff', borderRadius: 10, padding: 12,
+    marginBottom: 6, borderWidth: 1, borderColor: '#ede9fe',
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+  },
+  rptAttBtnGroup: {flexDirection: 'row', gap: 6},
+  rptAttBtn: {
+    width: 36, height: 36, borderRadius: 8, borderWidth: 1.5,
+    borderColor: '#e5e7eb', backgroundColor: '#f9fafb',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  rptAttBtnPOn: {backgroundColor: '#f0fdf4', borderColor: '#86efac'},
+  rptAttBtnAOn: {backgroundColor: '#fef2f2', borderColor: '#fca5a5'},
+  rptAttBtnTxt: {fontSize: 12, fontWeight: '500', color: '#9ca3af'},
 });
