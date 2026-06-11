@@ -12,6 +12,27 @@ import {
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
+import firebase from '@react-native-firebase/app';
+
+// ============ SECONDARY APP — ACCOUNT FACTORY ============
+// Masla: createUserWithEmailAndPassword naya account bana kar
+// USI mein login kar deta hai (admin ka session urr jata hai!)
+// Hal: ek alag "secondary" Firebase instance — naya user wahan
+// banta hai, admin ka asli session mehfooz rehta hai.
+const createAuthAccount = async (email: string, pass: string) => {
+  let secondary;
+  try {
+    secondary = firebase.app('USER_CREATOR');
+  } catch (e) {
+    const opts = firebase.app().options;
+    secondary = await firebase.initializeApp(
+      {...opts, databaseURL: opts.databaseURL || `https://${opts.projectId}.firebaseio.com`},
+      'USER_CREATOR',
+    );
+  }
+  await secondary.auth().createUserWithEmailAndPassword(email, pass);
+  await secondary.auth().signOut();
+};
 import {pick, types} from '@react-native-documents/picker';
 import * as XLSX from 'xlsx';
 import {
@@ -181,7 +202,7 @@ export default function AdminScreen({navigation}: any) {
   const copyTTDayToOthers = () => {
     Alert.alert(
       'Copy Day',
-      `${ttDay} ka timetable baqi sab dinon par copy karein? (Friday ke times chhote rahenge)`,
+      `${ttDay}'s timetable to all other days? (Friday will keep its shorter timings)`,
       [
         {text: 'Cancel', style: 'cancel'},
         {text: 'Copy', onPress: () => {
@@ -203,7 +224,7 @@ export default function AdminScreen({navigation}: any) {
             });
             return copy;
           });
-          Alert.alert('Done ✅', `${ttDay} sab dinon par copy ho gaya!`);
+          Alert.alert('Done ✅', `${ttDay} has been copied to all days.`);
         }},
       ],
     );
@@ -220,7 +241,7 @@ export default function AdminScreen({navigation}: any) {
       Alert.alert('Saved ✅', `${ttClass} ka timetable save ho gaya!`);
     } catch (e) {
       console.log('❌ QUANTAIP Error:', e);
-      Alert.alert('Error', 'Timetable save nahi hua. Dobara try karein.');
+      Alert.alert('Error', 'Could not save timetable. Please try again.');
     } finally {
       setSavingTT(false);
     }
@@ -493,9 +514,9 @@ export default function AdminScreen({navigation}: any) {
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
 
-      await auth().createUserWithEmailAndPassword(
+      await createAuthAccount(
         `${studentId.toLowerCase()}@quantaip.edu.pk`, studentPass);
-      await auth().createUserWithEmailAndPassword(
+      await createAuthAccount(
         `${parentId.toLowerCase()}@quantaip.edu.pk`, parentPass);
 
       setStats(prev => ({...prev, students: prev.students + 1}));
@@ -538,7 +559,7 @@ export default function AdminScreen({navigation}: any) {
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
 
-      await auth().createUserWithEmailAndPassword(
+      await createAuthAccount(
         `${teacherId.toLowerCase()}@quantaip.edu.pk`, defaultPass);
 
       setStats(prev => ({...prev, teachers: prev.teachers + 1}));
@@ -603,7 +624,7 @@ export default function AdminScreen({navigation}: any) {
                   school: SCHOOL_CODE,
                   createdAt: firestore.FieldValue.serverTimestamp(),
                 });
-              await auth().createUserWithEmailAndPassword(
+              await createAuthAccount(
                 `${teacherId.toLowerCase()}@quantaip.edu.pk`, defaultPass);
             } else {
               const studentId = generateId('student', currentIndex);
@@ -637,9 +658,9 @@ export default function AdminScreen({navigation}: any) {
                   createdAt: firestore.FieldValue.serverTimestamp(),
                 });
 
-              await auth().createUserWithEmailAndPassword(
+              await createAuthAccount(
                 `${studentId.toLowerCase()}@quantaip.edu.pk`, defaultPass);
-              await auth().createUserWithEmailAndPassword(
+              await createAuthAccount(
                 `${parentId.toLowerCase()}@quantaip.edu.pk`, parentPass);
             }
             totalSuccess++;
@@ -1373,7 +1394,7 @@ export default function AdminScreen({navigation}: any) {
 
             {!ttClass && !loadingTT && (
               <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
-                Upar se class select karein
+                Select a class above to begin
               </Text>
             )}
           </View>
