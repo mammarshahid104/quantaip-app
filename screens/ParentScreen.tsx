@@ -21,7 +21,7 @@ import {
 } from 'react-native-heroicons/outline';
 
 import {SCHOOL_CODE} from '../config';
-const TABS = ['Overview', 'Attendance', 'Timetable', 'Fee', 'Results', 'Notifications'];
+const TABS = ['Overview', 'Attendance', 'Homework', 'Timetable', 'Fee', 'Results', 'Notifications'];
 
 export default function ParentScreen({navigation}: any) {
   const [tab, setTab] = useState('Overview');
@@ -34,8 +34,10 @@ export default function ParentScreen({navigation}: any) {
   const [results, setResults] = useState<any[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
   const [timetable, setTimetable] = useState<any>(null);
+  const [homework, setHomework] = useState<any[]>([]);
   const todayName = new Date().toLocaleDateString('en-US', {weekday: 'long'});
   const [ttDay, setTtDay] = useState(todayName === 'Sunday' ? 'Monday' : todayName);
+  const todayKey = new Date().toISOString().split('T')[0];
 
   const month = new Date().toLocaleString('default', {month: 'long', year: 'numeric'});
 
@@ -99,6 +101,15 @@ export default function ParentScreen({navigation}: any) {
                 .collection('timetable').doc(studentData?.class)
                 .get();
               if (ttDoc.exists) setTimetable(ttDoc.data());
+            } catch (e) {console.log('❌ QUANTAIP Error:', e);}
+
+            // Homework (1 read — bachay ki class ka)
+            try {
+              const hwDoc = await firestore()
+                .collection('schools').doc(SCHOOL_CODE)
+                .collection('homework').doc(studentData?.class)
+                .get();
+              setHomework(hwDoc.data()?.items || []);
             } catch (e) {console.log('❌ QUANTAIP Error:', e);}
           }
         }
@@ -305,6 +316,48 @@ export default function ParentScreen({navigation}: any) {
         )}
 
         {/* FEE */}
+        {tab === 'Homework' && (
+          <View>
+            <Text style={styles.sectionTitle}>
+              Homework — {student?.fullName || student?.name}
+            </Text>
+            {homework.length === 0 ? (
+              <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
+                No homework assigned yet.
+              </Text>
+            ) : (
+              homework.map((hw: any, i: number) => {
+                const isOverdue = hw.dueDate && hw.dueDate < todayKey;
+                const isDueToday = hw.dueDate === todayKey;
+                return (
+                  <View key={i} style={{
+                    backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
+                    borderWidth: 1, marginBottom: 8,
+                    borderColor: isDueToday ? '#f59e0b' : isOverdue ? '#fecaca' : '#ede9fe',
+                  }}>
+                    <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+                      <Text style={{fontSize: 11, fontWeight: '700', color: '#d97706'}}>{hw.subject}</Text>
+                      <Text style={{
+                        fontSize: 11, fontWeight: '600',
+                        color: isDueToday ? '#d97706' : isOverdue ? '#ef4444' : '#9ca3af',
+                      }}>
+                        {isDueToday ? '⏰ Due Today' : isOverdue ? 'Past due: ' + hw.dueDate : 'Due: ' + hw.dueDate}
+                      </Text>
+                    </View>
+                    <Text style={{fontSize: 14, fontWeight: '600', color: '#1e1b4b', marginTop: 4}}>{hw.title}</Text>
+                    {hw.description ? (
+                      <Text style={{fontSize: 12, color: '#6b7280', marginTop: 2}}>{hw.description}</Text>
+                    ) : null}
+                    <Text style={{fontSize: 11, color: '#9ca3af', marginTop: 6}}>
+                      {hw.teacherName} · Assigned {hw.assignedDate}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
+
         {tab === 'Timetable' && (
           <View>
             {/* Day selector */}
@@ -352,7 +405,7 @@ export default function ParentScreen({navigation}: any) {
               ))
             ) : (
               <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
-                Timetable has not been set yet.
+                Timetable abhi set nahi hua.
               </Text>
             )}
           </View>

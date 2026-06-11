@@ -24,6 +24,7 @@ import {
   AcademicCapIcon,
   ChartBarIcon,
   CalendarDaysIcon,
+  ClipboardDocumentListIcon,
 } from 'react-native-heroicons/outline';
 
 import {SCHOOL_CODE} from '../config';
@@ -65,6 +66,71 @@ export default function TeacherScreen({navigation}: any) {
       setTtData(null);
     } finally {
       setLoadingTT(false);
+    }
+  };
+
+  // ============ HOMEWORK ============
+  const tomorrow = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  };
+
+  const [hwClass, setHwClass] = useState('');
+  const [hwSubject, setHwSubject] = useState('');
+  const [hwTitle, setHwTitle] = useState('');
+  const [hwDesc, setHwDesc] = useState('');
+  const [hwDue, setHwDue] = useState(tomorrow());
+  const [hwList, setHwList] = useState<any[]>([]);
+  const [loadingHW, setLoadingHW] = useState(false);
+  const [assigningHW, setAssigningHW] = useState(false);
+
+  const loadHomework = async (cls: string) => {
+    setHwClass(cls);
+    setLoadingHW(true);
+    try {
+      const doc = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('homework').doc(cls)
+        .get();
+      setHwList(doc.data()?.items || []);
+    } catch (e) {
+      console.log('❌ QUANTAIP Error:', e);
+      setHwList([]);
+    } finally {
+      setLoadingHW(false);
+    }
+  };
+
+  const assignHomework = async () => {
+    if (!hwClass || !hwSubject.trim() || !hwTitle.trim()) {
+      Alert.alert('Missing Information', 'Please select a class and enter subject and title.');
+      return;
+    }
+    setAssigningHW(true);
+    try {
+      const newItem = {
+        subject: hwSubject.trim(),
+        title: hwTitle.trim(),
+        description: hwDesc.trim(),
+        dueDate: hwDue.trim(),
+        teacherName: teacher?.name || '',
+        assignedDate: new Date().toISOString().split('T')[0],
+      };
+      // Naya item sab se upar, sirf aakhri 50 rakho (doc halka rahe)
+      const updated = [newItem, ...hwList].slice(0, 50);
+      await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('homework').doc(hwClass)
+        .set({items: updated});
+      setHwList(updated);
+      setHwSubject(''); setHwTitle(''); setHwDesc(''); setHwDue(tomorrow());
+      Alert.alert('Homework Assigned ✅', `Homework assigned to ${hwClass}.`);
+    } catch (e) {
+      console.log('❌ QUANTAIP Error:', e);
+      Alert.alert('Error', 'Could not assign homework. Please try again.');
+    } finally {
+      setAssigningHW(false);
     }
   };
 
@@ -299,6 +365,7 @@ export default function TeacherScreen({navigation}: any) {
   const TABS = [
     ...(inchargeClasses.length > 0 ? [{key: 'Attendance', icon: ClipboardDocumentCheckIcon}] : []),
     {key: 'Marks', icon: PencilSquareIcon},
+    {key: 'Homework', icon: ClipboardDocumentListIcon},
     {key: 'Timetable', icon: CalendarDaysIcon},
     {key: 'My Classes', icon: BookOpenIcon},
   ];
@@ -618,6 +685,133 @@ export default function TeacherScreen({navigation}: any) {
       )}
 
       {/* ── MY CLASSES TAB ── */}
+      {tab === 'Homework' && (
+        <ScrollView style={styles.content}>
+          <Text style={styles.sectionTitle}>Assign Homework</Text>
+
+          {/* Class selector — only assigned classes */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
+            {classes.map((cls, i) => (
+              <TouchableOpacity key={i}
+                style={{
+                  paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
+                  backgroundColor: hwClass === cls ? '#d97706' : '#ffffff',
+                  borderWidth: 1, borderColor: hwClass === cls ? '#d97706' : '#ede9fe',
+                }}
+                onPress={() => loadHomework(cls)}>
+                <Text style={{
+                  fontSize: 12, fontWeight: '600',
+                  color: hwClass === cls ? '#ffffff' : '#6b7280',
+                }}>{cls}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {hwClass ? (
+            <View>
+              {/* Assign form */}
+              <View style={{
+                backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
+                borderWidth: 1, borderColor: '#ede9fe', marginBottom: 16,
+              }}>
+                <TextInput
+                  style={{
+                    borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
+                    paddingHorizontal: 12, paddingVertical: 8, fontSize: 13,
+                    color: '#1e1b4b', marginBottom: 8,
+                  }}
+                  placeholder="Subject (e.g. Physics)"
+                  placeholderTextColor="#c4b5fd"
+                  value={hwSubject}
+                  onChangeText={setHwSubject}
+                />
+                <TextInput
+                  style={{
+                    borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
+                    paddingHorizontal: 12, paddingVertical: 8, fontSize: 13,
+                    color: '#1e1b4b', marginBottom: 8,
+                  }}
+                  placeholder="Title (e.g. Chapter 15 Exercise)"
+                  placeholderTextColor="#c4b5fd"
+                  value={hwTitle}
+                  onChangeText={setHwTitle}
+                />
+                <TextInput
+                  style={{
+                    borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
+                    paddingHorizontal: 12, paddingVertical: 8, fontSize: 13,
+                    color: '#1e1b4b', marginBottom: 8, minHeight: 70,
+                    textAlignVertical: 'top',
+                  }}
+                  placeholder="Details (e.g. Solve Q1 to Q5 from exercise)"
+                  placeholderTextColor="#c4b5fd"
+                  value={hwDesc}
+                  onChangeText={setHwDesc}
+                  multiline
+                />
+                <TextInput
+                  style={{
+                    borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
+                    paddingHorizontal: 12, paddingVertical: 8, fontSize: 13,
+                    color: '#1e1b4b', marginBottom: 12,
+                  }}
+                  placeholder="Due date (YYYY-MM-DD)"
+                  placeholderTextColor="#c4b5fd"
+                  value={hwDue}
+                  onChangeText={setHwDue}
+                />
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#d97706', borderRadius: 10,
+                    padding: 13, alignItems: 'center',
+                  }}
+                  disabled={assigningHW}
+                  onPress={assignHomework}>
+                  {assigningHW ? <ActivityIndicator color="#ffffff" /> : (
+                    <Text style={{color: '#ffffff', fontSize: 14, fontWeight: '700'}}>
+                      Assign to {hwClass}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Recent homework list */}
+              <Text style={styles.sectionTitle}>Recent — {hwClass}</Text>
+              {loadingHW && <ActivityIndicator color="#d97706" style={{marginVertical: 16}} />}
+              {!loadingHW && hwList.length === 0 && (
+                <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 12}}>
+                  No homework assigned yet.
+                </Text>
+              )}
+              {!loadingHW && hwList.map((hw: any, i: number) => (
+                <View key={i} style={{
+                  backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
+                  borderWidth: 1, borderColor: '#ede9fe', marginBottom: 8,
+                }}>
+                  <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <Text style={{fontSize: 11, fontWeight: '700', color: '#d97706'}}>{hw.subject}</Text>
+                    <Text style={{fontSize: 11, color: '#9ca3af'}}>Due: {hw.dueDate}</Text>
+                  </View>
+                  <Text style={{fontSize: 14, fontWeight: '600', color: '#1e1b4b', marginTop: 4}}>{hw.title}</Text>
+                  {hw.description ? (
+                    <Text style={{fontSize: 12, color: '#6b7280', marginTop: 2}}>{hw.description}</Text>
+                  ) : null}
+                  <Text style={{fontSize: 11, color: '#9ca3af', marginTop: 6}}>
+                    {hw.teacherName} · {hw.assignedDate}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
+              Select a class above to assign homework
+            </Text>
+          )}
+
+          <View style={{height: 30}} />
+        </ScrollView>
+      )}
+
       {tab === 'Timetable' && (
         <ScrollView style={styles.content}>
           <Text style={styles.sectionTitle}>Class Timetable</Text>

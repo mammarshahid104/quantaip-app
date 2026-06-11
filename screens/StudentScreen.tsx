@@ -22,7 +22,7 @@ import {
 } from 'react-native-heroicons/outline';
 
 import {SCHOOL_CODE} from '../config';
-const TABS = ['Overview', 'Attendance', 'Grades', 'Results', 'Timetable'];
+const TABS = ['Overview', 'Attendance', 'Homework', 'Grades', 'Results', 'Timetable'];
 
 const TEST_TYPE_ORDER = ['weekly', 'monthly', 'midterm', 'sendup', 'final', 'classtest'];
 const TEST_TYPE_LABELS: any = {
@@ -44,8 +44,10 @@ export default function StudentScreen({navigation}: any) {
   const [loadingMarks, setLoadingMarks] = useState(false);
   const [loadingResults, setLoadingResults] = useState(false);
   const [timetable, setTimetable] = useState<any>(null);
+  const [homework, setHomework] = useState<any[]>([]);
   const todayName = new Date().toLocaleDateString('en-US', {weekday: 'long'});
   const [ttDay, setTtDay] = useState(todayName === 'Sunday' ? 'Monday' : todayName);
+  const todayKey = new Date().toISOString().split('T')[0];
 
   const today = new Date().toLocaleDateString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
@@ -66,6 +68,7 @@ export default function StudentScreen({navigation}: any) {
         setStudent(doc.data());
         loadAttendance(doc.data());
         loadTimetable(doc.data());
+        loadHomework(doc.data());
       }
     } catch (e) {
     } finally {
@@ -80,6 +83,16 @@ export default function StudentScreen({navigation}: any) {
         .collection('timetable').doc(studentData?.class)
         .get();
       if (doc.exists) setTimetable(doc.data());
+    } catch (e) {console.log('❌ QUANTAIP Error:', e);}
+  };
+
+  const loadHomework = async (studentData: any) => {
+    try {
+      const doc = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('homework').doc(studentData?.class)
+        .get();
+      setHomework(doc.data()?.items || []);
     } catch (e) {console.log('❌ QUANTAIP Error:', e);}
   };
 
@@ -490,6 +503,46 @@ export default function StudentScreen({navigation}: any) {
         )}
 
         {/* TIMETABLE */}
+        {tab === 'Homework' && (
+          <View>
+            <Text style={styles.ttDay}>Homework — {student?.class}</Text>
+            {homework.length === 0 ? (
+              <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
+                No homework assigned yet. 🎉
+              </Text>
+            ) : (
+              homework.map((hw: any, i: number) => {
+                const isOverdue = hw.dueDate && hw.dueDate < todayKey;
+                const isDueToday = hw.dueDate === todayKey;
+                return (
+                  <View key={i} style={{
+                    backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
+                    borderWidth: 1, marginBottom: 8,
+                    borderColor: isDueToday ? '#f59e0b' : isOverdue ? '#fecaca' : '#ede9fe',
+                  }}>
+                    <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+                      <Text style={{fontSize: 11, fontWeight: '700', color: '#d97706'}}>{hw.subject}</Text>
+                      <Text style={{
+                        fontSize: 11, fontWeight: '600',
+                        color: isDueToday ? '#d97706' : isOverdue ? '#ef4444' : '#9ca3af',
+                      }}>
+                        {isDueToday ? '⏰ Due Today' : isOverdue ? 'Past due: ' + hw.dueDate : 'Due: ' + hw.dueDate}
+                      </Text>
+                    </View>
+                    <Text style={{fontSize: 14, fontWeight: '600', color: '#1e1b4b', marginTop: 4}}>{hw.title}</Text>
+                    {hw.description ? (
+                      <Text style={{fontSize: 12, color: '#6b7280', marginTop: 2}}>{hw.description}</Text>
+                    ) : null}
+                    <Text style={{fontSize: 11, color: '#9ca3af', marginTop: 6}}>
+                      {hw.teacherName} · Assigned {hw.assignedDate}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
+
         {tab === 'Timetable' && (
           <View>
             {/* Day selector */}
@@ -531,7 +584,7 @@ export default function StudentScreen({navigation}: any) {
               ))
             ) : (
               <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
-                Timetable has not been set yet. Please contact your school admin.
+                Timetable abhi set nahi hua. Admin se rabta karein.
               </Text>
             )}
           </View>
