@@ -60,10 +60,11 @@ export default function ClassesScreen() {
         .collection('schools').doc(SCHOOL_CODE)
         .collection('classes').doc(cls)
         .get();
-      if (doc.exists) {
-        setSections(doc.data()?.sections || []);
-        setClassIncharge(doc.data()?.classIncharge || '');
-        setClassInchargeName(doc.data()?.classInchargeName || '');
+      const data = doc.data();
+      if (data) {
+        setSections(data.sections || []);
+        setClassIncharge(data.classIncharge || '');
+        setClassInchargeName(data.classInchargeName || '');
       } else {
         setSections([]);
         setClassIncharge('');

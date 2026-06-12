@@ -171,8 +171,8 @@ export default function TeacherScreen({navigation}: any) {
         .collection('teachers').doc(id)
         .get();
 
-      if (doc.exists) {
-        const teacherData = doc.data();
+      const teacherData = doc.data();
+      if (teacherData) {
         setTeacher(teacherData);
         setClasses(teacherData?.classesAssigned || []);
 

@@ -64,11 +64,12 @@ export default function StudentScreen({navigation}: any) {
         .collection('schools').doc(SCHOOL_CODE)
         .collection('students').doc(id)
         .get();
-      if (doc.exists) {
-        setStudent(doc.data());
-        loadAttendance(doc.data());
-        loadTimetable(doc.data());
-        loadHomework(doc.data());
+      const studentData = doc.data();
+      if (studentData) {
+        setStudent(studentData);
+        loadAttendance(studentData);
+        loadTimetable(studentData);
+        loadHomework(studentData);
       }
     } catch (e) {
     } finally {
@@ -82,7 +83,7 @@ export default function StudentScreen({navigation}: any) {
         .collection('schools').doc(SCHOOL_CODE)
         .collection('timetable').doc(studentData?.class)
         .get();
-      if (doc.exists) setTimetable(doc.data());
+      const ttData = doc.data(); if (ttData) setTimetable(ttData);
     } catch (e) {console.log('❌ QUANTAIP Error:', e);}
   };
 

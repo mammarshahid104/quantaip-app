@@ -102,7 +102,7 @@ export default function FeeScreen() {
             .collection('fees').doc(month)
             .collection('students').doc(student.id)
             .get();
-          const feeData = feeDoc.exists ? feeDoc.data() : null;
+          const feeData = feeDoc.data() || null;
           return {
             ...student,
             feeStatus: feeData?.status || 'pending',

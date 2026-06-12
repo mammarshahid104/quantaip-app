@@ -58,8 +58,8 @@ export default function ParentScreen({navigation}: any) {
         .collection('parents').doc(id)
         .get();
 
-      if (parentDoc.exists) {
-        const parentData = parentDoc.data();
+      const parentData = parentDoc.data();
+      if (parentData) {
         setParent(parentData);
 
         if (parentData?.studentId) {
@@ -68,8 +68,8 @@ export default function ParentScreen({navigation}: any) {
             .collection('students').doc(parentData.studentId)
             .get();
 
-          if (studentDoc.exists) {
-            const studentData = studentDoc.data();
+          const studentData = studentDoc.data();
+          if (studentData) {
             setStudent(studentData);
 
             // NAYA TAREEQA: attendanceMap se direct — koi extra read nahi!
@@ -86,13 +86,13 @@ export default function ParentScreen({navigation}: any) {
               .collection('fees').doc(month)
               .collection('students').doc(studentData?.id)
               .get();
-            setFeeStatus(feeDoc.exists ? feeDoc.data() : null);
+            setFeeStatus(feeDoc.data() || null);
 
             const feeStructDoc = await firestore()
               .collection('schools').doc(SCHOOL_CODE)
               .collection('feeStructure').doc(studentData?.class)
               .get();
-            setFeeStructure(feeStructDoc.exists ? feeStructDoc.data()?.amount || 0 : 0);
+            setFeeStructure(feeStructDoc.data()?.amount || 0);
 
             // Timetable (1 read — bachay ki class ka)
             try {
@@ -100,7 +100,7 @@ export default function ParentScreen({navigation}: any) {
                 .collection('schools').doc(SCHOOL_CODE)
                 .collection('timetable').doc(studentData?.class)
                 .get();
-              if (ttDoc.exists) setTimetable(ttDoc.data());
+              const ttData = ttDoc.data(); if (ttData) setTimetable(ttData);
             } catch (e) {console.log('❌ QUANTAIP Error:', e);}
 
             // Homework (1 read — bachay ki class ka)

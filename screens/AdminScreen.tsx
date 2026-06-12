@@ -346,11 +346,6 @@ export default function AdminScreen({navigation}: any) {
     if (tab === 'Reports') loadReportData();
   }, [tab]);
 
-  // Jab month change ho tab bhi reload karo
-  useEffect(() => {
-    if (tab === 'Reports') loadReportData();
-  }, [reportMonth]);
-
   // ============ REPORTS FUNCTIONS ============
   const loadReportData = async () => {
     setLoadingReport(true);
@@ -491,8 +486,8 @@ export default function AdminScreen({navigation}: any) {
           .collection('students').doc(student.id)
           .get();
 
-        if (studentMarkDoc.exists) {
-          const markData = studentMarkDoc.data();
+        const markData = studentMarkDoc.data();
+        if (markData) {
           subjects[testData.subject] = {
             obtained: markData?.obtained || 0,
             total: testData.totalMarks,
@@ -1083,9 +1078,7 @@ export default function AdminScreen({navigation}: any) {
                                     .collection('schools').doc(SCHOOL_CODE)
                                     .collection('parents').doc(parentId)
                                     .get();
-                                  const parentPass = parentDoc.exists
-                                    ? parentDoc.data()?.password || 'Not saved'
-                                    : 'Not saved';
+                                  const parentPass = parentDoc.data()?.password || 'Not saved';
                                   setCredModal({...s, parentPassword: parentPass});
                                 } catch (e) {
                                   setCredModal({...s, parentPassword: 'Not saved'});
