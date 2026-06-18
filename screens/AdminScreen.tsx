@@ -56,6 +56,7 @@ import ClassesScreen from './ClassesScreen';
 import FeeScreen from './FeeScreen';
 
 import {SCHOOL_CODE} from '../config';
+import {theme} from '../theme';
 
 const CLASS_HIERARCHY = [
   {category: 'Early Education', classes: ['Nursery', 'Prep', 'KG']},
@@ -392,10 +393,10 @@ export default function AdminScreen({navigation}: any) {
   };
 
   const STAT_CARDS = [
-    {val: stats.students.toString(), lbl: 'Students', color: '#7c3aed', bg: '#f5f3ff', Icon: UserGroupIcon},
-    {val: stats.teachers.toString(), lbl: 'Teachers', color: '#0891b2', bg: '#ecfeff', Icon: AcademicCapIcon},
-    {val: '91%', lbl: 'Attendance', color: '#16a34a', bg: '#f0fdf4', Icon: ChartBarIcon},
-    {val: stats.fee, lbl: 'PKR Fees', color: '#ea580c', bg: '#fff7ed', Icon: BanknotesIcon},
+    {val: stats.students.toString(), lbl: 'Students', color: theme.colors.navy, Icon: UserGroupIcon},
+    {val: stats.teachers.toString(), lbl: 'Teachers', color: '#0284c7', Icon: AcademicCapIcon},
+    {val: '91%', lbl: 'Attendance', color: '#16a34a', Icon: ChartBarIcon},
+    {val: stats.fee, lbl: 'PKR Fees', color: '#ea580c', Icon: BanknotesIcon},
   ];
 
   const toggleCategory = (cat: string) => {
@@ -877,13 +878,13 @@ export default function AdminScreen({navigation}: any) {
               </View>
             ))}
             <TouchableOpacity
-              style={[styles.modalCloseBtn, {backgroundColor: '#7c3aed', marginBottom: 8}]}
+              style={[styles.modalCloseBtn, {marginBottom: 8}]}
               onPress={() => {
                 setEditClassesModal({...teacherModal});
                 setTeacherModal(null);
               }}>
               <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                <PencilSquareIcon size={16} color="#ffffff" />
+                <PencilSquareIcon size={16} color={theme.colors.gold} />
                 <Text style={styles.modalCloseTxt}>Edit Classes</Text>
               </View>
             </TouchableOpacity>
@@ -956,19 +957,6 @@ export default function AdminScreen({navigation}: any) {
         </TouchableOpacity>
       </View>
 
-      {/* TABS */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        style={styles.tabScroll} contentContainerStyle={styles.tabRow}>
-        {TABS.map(({key, icon: TabIcon}) => (
-          <TouchableOpacity key={key}
-            style={[styles.tab, tab === key && styles.tabOn]}
-            onPress={() => setTab(key)}>
-            <TabIcon size={16} color={tab === key ? '#7c3aed' : '#9ca3af'} />
-            <Text style={[styles.tabTxt, tab === key && styles.tabTxtOn]}>{key}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
       <ScrollView style={styles.content}>
 
         {/* DASHBOARD */}
@@ -981,7 +969,7 @@ export default function AdminScreen({navigation}: any) {
             </View>
             <View style={styles.statsGrid}>
               {STAT_CARDS.map((s, i) => (
-                <View key={i} style={[styles.statCard, {backgroundColor: s.bg, borderColor: s.color + '33'}]}>
+                <View key={i} style={styles.statCard}>
                   <s.Icon size={20} color={s.color} />
                   <Text style={[styles.statVal, {color: s.color}]}>{s.val}</Text>
                   <Text style={styles.statLbl}>{s.lbl}</Text>
@@ -990,14 +978,14 @@ export default function AdminScreen({navigation}: any) {
             </View>
             <View style={styles.quickGrid}>
               {[
-                {label: 'Add Student', icon: UserIcon, tabKey: 'Students', color: '#7c3aed'},
-                {label: 'Add Teacher', icon: AcademicCapIcon, tabKey: 'Teachers', color: '#0891b2'},
-                {label: 'Import Data', icon: ArrowUpTrayIcon, tabKey: 'Import', color: '#16a34a'},
-                {label: 'Fee Management', icon: BanknotesIcon, tabKey: 'Fee', color: '#ea580c'},
+                {label: 'Add Student', icon: UserIcon, tabKey: 'Students'},
+                {label: 'Add Teacher', icon: AcademicCapIcon, tabKey: 'Teachers'},
+                {label: 'Import Data', icon: ArrowUpTrayIcon, tabKey: 'Import'},
+                {label: 'Fee Management', icon: BanknotesIcon, tabKey: 'Fee'},
               ].map((item, i) => (
                 <TouchableOpacity key={i} style={styles.quickBtn} onPress={() => setTab(item.tabKey)}>
-                  <View style={[styles.quickIconBox, {backgroundColor: item.color + '15'}]}>
-                    <item.icon size={22} color={item.color} />
+                  <View style={styles.quickIconBox}>
+                    <item.icon size={22} color={theme.colors.gold} />
                   </View>
                   <Text style={styles.quickLbl}>{item.label}</Text>
                 </TouchableOpacity>
@@ -1029,17 +1017,17 @@ export default function AdminScreen({navigation}: any) {
                   <TextInput
                     style={styles.searchInput}
                     placeholder="Search by name or ID..."
-                    placeholderTextColor="#c4b5fd"
+                    placeholderTextColor="#b8a88a"
                     value={studentSearch}
                     onChangeText={setStudentSearch}
                   />
                 </View>
 
                 {loadingStudents ? (
-                  <ActivityIndicator color="#7c3aed" size="large" style={{marginTop: 30}} />
+                  <ActivityIndicator color="#B8960A" size="large" style={{marginTop: 30}} />
                 ) : groupedStudents.length === 0 ? (
                   <View style={styles.emptyBox}>
-                    <UserGroupIcon size={40} color="#c4b5fd" />
+                    <UserGroupIcon size={40} color="#b8a88a" />
                     <Text style={styles.emptyTxt}>No students found</Text>
                   </View>
                 ) : (
@@ -1054,8 +1042,8 @@ export default function AdminScreen({navigation}: any) {
                             {cat.classes.reduce((sum, c) => sum + c.students.length, 0)} students
                           </Text>
                           {expandedCategories.includes(cat.category)
-                            ? <ChevronDownIcon size={16} color="#7c3aed" />
-                            : <ChevronRightIcon size={16} color="#7c3aed" />}
+                            ? <ChevronDownIcon size={16} color="#B8960A" />
+                            : <ChevronRightIcon size={16} color="#B8960A" />}
                         </View>
                       </TouchableOpacity>
 
@@ -1095,7 +1083,7 @@ export default function AdminScreen({navigation}: any) {
                                   <Text style={styles.studentMeta}>Roll {s.rollNo || 'N/A'} · {s.id}</Text>
                                 </View>
                               </View>
-                              <KeyIcon size={16} color="#c4b5fd" />
+                              <KeyIcon size={16} color="#B8960A" />
                             </TouchableOpacity>
                           ))}
                         </View>
@@ -1131,7 +1119,7 @@ export default function AdminScreen({navigation}: any) {
                       <Text style={styles.fieldLabel}>{field.label}</Text>
                       <TextInput style={styles.input}
                         placeholder={field.placeholder}
-                        placeholderTextColor="#c4b5fd"
+                        placeholderTextColor="#b8a88a"
                         value={field.value}
                         onChangeText={field.setter}
                         keyboardType={(field as any).keyboard || 'default'}
@@ -1175,10 +1163,10 @@ export default function AdminScreen({navigation}: any) {
             {teacherTab === 'List' && (
               <View>
                 {loadingTeachers ? (
-                  <ActivityIndicator color="#7c3aed" size="large" style={{marginTop: 30}} />
+                  <ActivityIndicator color="#B8960A" size="large" style={{marginTop: 30}} />
                 ) : teacherList.length === 0 ? (
                   <View style={styles.emptyBox}>
-                    <AcademicCapIcon size={40} color="#c4b5fd" />
+                    <AcademicCapIcon size={40} color="#b8a88a" />
                     <Text style={styles.emptyTxt}>No teachers added yet</Text>
                   </View>
                 ) : (
@@ -1186,8 +1174,8 @@ export default function AdminScreen({navigation}: any) {
                     <TouchableOpacity key={i} style={styles.studentCard}
                       onPress={() => setTeacherModal(t)}>
                       <View style={styles.studentCardLeft}>
-                        <View style={[styles.studentAv, {backgroundColor: '#ecfeff', borderColor: '#0891b2'}]}>
-                          <Text style={[styles.studentAvTxt, {color: '#0891b2'}]}>
+                        <View style={styles.studentAv}>
+                          <Text style={styles.studentAvTxt}>
                             {(t.name || '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                           </Text>
                         </View>
@@ -1205,9 +1193,9 @@ export default function AdminScreen({navigation}: any) {
                         <TouchableOpacity
                           style={styles.editClassesBtn}
                           onPress={() => setEditClassesModal({...t})}>
-                          <PencilSquareIcon size={16} color="#7c3aed" />
+                          <PencilSquareIcon size={16} color="#B8960A" />
                         </TouchableOpacity>
-                        <KeyIcon size={16} color="#c4b5fd" />
+                        <KeyIcon size={16} color="#B8960A" />
                       </View>
                     </TouchableOpacity>
                   ))
@@ -1227,7 +1215,7 @@ export default function AdminScreen({navigation}: any) {
                       <Text style={styles.fieldLabel}>{field.label}</Text>
                       <TextInput style={styles.input}
                         placeholder={field.placeholder}
-                        placeholderTextColor="#c4b5fd"
+                        placeholderTextColor="#b8a88a"
                         value={field.value}
                         onChangeText={field.setter}
                         keyboardType={(field as any).keyboard || 'default'}
@@ -1238,13 +1226,13 @@ export default function AdminScreen({navigation}: any) {
                     <Text style={styles.fieldLabel}>CLASSES ASSIGNED (optional)</Text>
                     <TextInput style={styles.input}
                       placeholder="e.g. Grade 9, Grade 10"
-                      placeholderTextColor="#c4b5fd"
+                      placeholderTextColor="#b8a88a"
                       value={tClasses}
                       onChangeText={setTClasses}
                     />
                     <Text style={styles.inputHint}>You can also assign classes later from teacher list</Text>
                   </View>
-                  <TouchableOpacity style={[styles.addBtn, {backgroundColor: '#0891b2'}]}
+                  <TouchableOpacity style={styles.addBtn}
                     onPress={addTeacher} disabled={loading}>
                     {loading ? <ActivityIndicator color="#ffffff" /> :
                       <View style={styles.btnInner}>
@@ -1316,11 +1304,11 @@ export default function AdminScreen({navigation}: any) {
             <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
               <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
                 <View style={[styles.studentAv, {
-                  backgroundColor: s.position <= 3 ? '#fffbeb' : '#f5f3ff',
-                  borderColor: s.position <= 3 ? '#f59e0b' : '#7c3aed',
+                  backgroundColor: s.position <= 3 ? '#fffbeb' : '#fdf8ee',
+                  borderColor: s.position <= 3 ? '#f59e0b' : '#B8960A',
                 }]}>
                   <Text style={[styles.studentAvTxt, {
-                    color: s.position <= 3 ? '#f59e0b' : '#7c3aed',
+                    color: s.position <= 3 ? '#f59e0b' : '#B8960A',
                   }]}>
                     #{s.position}
                   </Text>
@@ -1331,14 +1319,14 @@ export default function AdminScreen({navigation}: any) {
                 </View>
               </View>
               <View style={{
-                backgroundColor: s.grade === 'A+' ? '#f0fdf4' : s.grade === 'F' ? '#fef2f2' : '#f5f3ff',
+                backgroundColor: s.grade === 'A+' ? '#f0fdf4' : s.grade === 'F' ? '#fef2f2' : '#fdf8ee',
                 borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
                 borderWidth: 1,
-                borderColor: s.grade === 'A+' ? '#86efac' : s.grade === 'F' ? '#fca5a5' : '#c4b5fd',
+                borderColor: s.grade === 'A+' ? '#86efac' : s.grade === 'F' ? '#fca5a5' : '#e8d5a3',
               }}>
                 <Text style={{
                   fontSize: 14, fontWeight: '700',
-                  color: s.grade === 'A+' ? '#16a34a' : s.grade === 'F' ? '#ef4444' : '#7c3aed',
+                  color: s.grade === 'A+' ? '#16a34a' : s.grade === 'F' ? '#ef4444' : '#B8960A',
                 }}>{s.grade}</Text>
               </View>
             </View>
@@ -1358,10 +1346,10 @@ export default function AdminScreen({navigation}: any) {
 
             <View style={{
               flexDirection: 'row', justifyContent: 'space-between',
-              marginTop: 8, paddingTop: 8, borderTopWidth: 1.5, borderTopColor: '#ede9fe',
+              marginTop: 8, paddingTop: 8, borderTopWidth: 1.5, borderTopColor: '#ece5d3',
             }}>
-              <Text style={{fontSize: 13, fontWeight: '700', color: '#1e1b4b'}}>Total</Text>
-              <Text style={{fontSize: 13, fontWeight: '700', color: '#7c3aed'}}>
+              <Text style={{fontSize: 13, fontWeight: '700', color: '#0d1f3c'}}>Total</Text>
+              <Text style={{fontSize: 13, fontWeight: '700', color: '#B8960A'}}>
                 {s.totalObtained}/{s.totalMarks} ({s.percentage}%)
               </Text>
             </View>
@@ -1389,7 +1377,7 @@ export default function AdminScreen({navigation}: any) {
               ))}
             </ScrollView>
 
-            {loadingTT && <ActivityIndicator color="#7c3aed" style={{marginVertical: 20}} />}
+            {loadingTT && <ActivityIndicator color="#B8960A" style={{marginVertical: 20}} />}
 
             {ttClass && ttData && !loadingTT && (
               <View>
@@ -1417,20 +1405,20 @@ export default function AdminScreen({navigation}: any) {
                     <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
                       <View style={{
                         width: 30, height: 30, borderRadius: 15,
-                        backgroundColor: slot.period === 0 ? '#dcfce7' : '#f5f3ff',
+                        backgroundColor: slot.period === 0 ? '#dcfce7' : '#fdf8ee',
                         alignItems: 'center', justifyContent: 'center',
                       }}>
-                        <Text style={{fontSize: 12, fontWeight: '700', color: slot.period === 0 ? '#16a34a' : '#7c3aed'}}>
+                        <Text style={{fontSize: 12, fontWeight: '700', color: slot.period === 0 ? '#16a34a' : '#B8960A'}}>
                           {slot.period === 0 ? '🍎' : slot.period}
                         </Text>
                       </View>
                       <TextInput
                         style={{
-                          flex: 1, borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
-                          paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#1e1b4b',
+                          flex: 1, borderWidth: 1, borderColor: '#ece5d3', borderRadius: 8,
+                          paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0d1f3c',
                         }}
                         placeholder="Time (e.g. 8:00 - 8:40)"
-                        placeholderTextColor="#c4b5fd"
+                        placeholderTextColor="#b8a88a"
                         value={slot.time}
                         onChangeText={t => updateTTSlot(i, 'time', t)}
                       />
@@ -1439,21 +1427,21 @@ export default function AdminScreen({navigation}: any) {
                       <View style={{flexDirection: 'row', gap: 8, marginTop: 8}}>
                         <TextInput
                           style={{
-                            flex: 1, borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
-                            paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#1e1b4b',
+                            flex: 1, borderWidth: 1, borderColor: '#ece5d3', borderRadius: 8,
+                            paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0d1f3c',
                           }}
                           placeholder="Subject"
-                          placeholderTextColor="#c4b5fd"
+                          placeholderTextColor="#b8a88a"
                           value={slot.subject}
                           onChangeText={t => updateTTSlot(i, 'subject', t)}
                         />
                         <TextInput
                           style={{
-                            flex: 1, borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
-                            paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#1e1b4b',
+                            flex: 1, borderWidth: 1, borderColor: '#ece5d3', borderRadius: 8,
+                            paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, color: '#0d1f3c',
                           }}
                           placeholder="Teacher"
-                          placeholderTextColor="#c4b5fd"
+                          placeholderTextColor="#b8a88a"
                           value={slot.teacher}
                           onChangeText={t => updateTTSlot(i, 'teacher', t)}
                         />
@@ -1464,7 +1452,7 @@ export default function AdminScreen({navigation}: any) {
 
                 {/* Copy day button */}
                 <TouchableOpacity
-                  style={[styles.addBtn, {backgroundColor: '#0891b2', marginBottom: 10}]}
+                  style={[styles.addBtn, {marginBottom: 10}]}
                   onPress={copyTTDayToOthers}>
                   <View style={styles.btnInner}>
                     <DocumentDuplicateIcon size={18} color="#ffffff" />
@@ -1558,13 +1546,13 @@ export default function AdminScreen({navigation}: any) {
               </ScrollView>
 
               {loadingReport ? (
-                <ActivityIndicator color="#7c3aed" size="large" style={{marginVertical: 30}} />
+                <ActivityIndicator color="#B8960A" size="large" style={{marginVertical: 30}} />
               ) : (
                 <View>
                   {/* ── SUMMARY CARDS ── */}
                   <View style={styles.rptSummaryRow}>
-                    <View style={[styles.rptSummaryCard, {backgroundColor: '#f5f3ff', borderColor: '#c4b5fd'}]}>
-                      <Text style={[styles.rptSummaryVal, {color: '#7c3aed'}]}>{overallPct}%</Text>
+                    <View style={[styles.rptSummaryCard, {backgroundColor: '#fdf8ee', borderColor: '#e8d5a3'}]}>
+                      <Text style={[styles.rptSummaryVal, {color: '#B8960A'}]}>{overallPct}%</Text>
                       <Text style={styles.rptSummaryLbl}>Overall</Text>
                     </View>
                     <View style={[styles.rptSummaryCard, {backgroundColor: '#f0fdf4', borderColor: '#86efac'}]}>
@@ -1587,7 +1575,7 @@ export default function AdminScreen({navigation}: any) {
                   ) : (
                     classStats.map((row, i) => {
                       const low = row.pct < 75;
-                      const barColor = row.pct >= 75 ? '#7c3aed' : row.pct >= 60 ? '#f59e0b' : '#ef4444';
+                      const barColor = row.pct >= 75 ? '#B8960A' : row.pct >= 60 ? '#f59e0b' : '#ef4444';
                       return (
                         <View key={i} style={[styles.rptClassRow, low && {borderColor: '#fde68a', backgroundColor: '#fffbeb'}]}>
                           <View style={styles.rptClassTop}>
@@ -1642,8 +1630,8 @@ export default function AdminScreen({navigation}: any) {
                         const status = teacherAtt[t.id];
                         return (
                           <View key={i} style={styles.rptTeacherRow}>
-                            <View style={[styles.studentAv, {borderColor: '#0891b2'}]}>
-                              <Text style={[styles.studentAvTxt, {color: '#0891b2'}]}>
+                            <View style={styles.studentAv}>
+                              <Text style={styles.studentAvTxt}>
                                 {(t.name || '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                               </Text>
                             </View>
@@ -1692,7 +1680,7 @@ export default function AdminScreen({navigation}: any) {
                     const tot = tp + ta;
                     if (tot === 0) return null;
                     const pct = Math.round((tp / tot) * 100);
-                    const barColor = pct >= 75 ? '#0891b2' : pct >= 60 ? '#f59e0b' : '#ef4444';
+                    const barColor = pct >= 75 ? '#0284c7' : pct >= 60 ? '#f59e0b' : '#ef4444';
                     return (
                       <View key={i} style={styles.rptClassRow}>
                         <View style={styles.rptClassTop}>
@@ -1752,67 +1740,82 @@ export default function AdminScreen({navigation}: any) {
           </View>
         )}
 
-        <View style={{height: 30}} />
+        <View style={{height: 80}} />
       </ScrollView>
+
+      {/* BOTTOM TAB BAR */}
+      <View style={styles.bottomBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.bottomBarContent}>
+          {TABS.map(({key, icon: TabIcon}) => (
+            <TouchableOpacity key={key} style={styles.bottomTab} onPress={() => setTab(key)}>
+              <TabIcon size={22} color={tab === key ? '#B8960A' : '#94a3b8'} />
+              <Text style={[styles.bottomTabTxt, tab === key && styles.bottomTabTxtOn]}>{key}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: '#faf5ff'},
+  root: {flex: 1, backgroundColor: '#faf8f2'},
   navbar: {
-    backgroundColor: '#1e1b4b', paddingTop: 50, paddingBottom: 16,
+    backgroundColor: '#0d1f3c', paddingTop: 50, paddingBottom: 16,
     paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
   },
   brand: {fontSize: 20, fontWeight: '700', color: '#ffffff', letterSpacing: 2},
-  brandAccent: {color: '#a78bfa'},
-  tabScroll: {backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ede9fe', maxHeight: 48},
-  tabRow: {paddingHorizontal: 4},
-  tab: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 12, paddingVertical: 12,
-    borderBottomWidth: 2, borderBottomColor: 'transparent',
-  },
-  tabOn: {borderBottomColor: '#7c3aed'},
-  tabTxt: {fontSize: 12, fontWeight: '500', color: '#9ca3af'},
-  tabTxtOn: {color: '#7c3aed', fontWeight: '700'},
+  brandAccent: {color: '#C9A84C'},
+
+  // ── BOTTOM TAB BAR ──
+  bottomBar: {backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#ece5d3'},
+  bottomBarContent: {paddingHorizontal: 4, paddingVertical: 6},
+  bottomTab: {alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 4, gap: 2, minWidth: 70},
+  bottomTabTxt: {fontSize: 10, fontWeight: '500', color: '#94a3b8'},
+  bottomTabTxtOn: {color: '#B8960A', fontWeight: '700'},
+
   content: {flex: 1, paddingHorizontal: 14, paddingTop: 14},
-  welcomeCard: {backgroundColor: '#1e1b4b', borderRadius: 16, padding: 20, marginBottom: 16},
-  welcomeEye: {fontSize: 10, letterSpacing: 4, color: '#a78bfa', fontWeight: '600', marginBottom: 6},
+  welcomeCard: {backgroundColor: '#0d1f3c', borderRadius: 16, padding: 20, marginBottom: 16},
+  welcomeEye: {fontSize: 10, letterSpacing: 4, color: '#C9A84C', fontWeight: '600', marginBottom: 6},
   welcomeTitle: {fontSize: 22, fontWeight: '700', color: '#ffffff', marginBottom: 4},
-  welcomeAccent: {color: '#a78bfa'},
+  welcomeAccent: {color: '#C9A84C'},
   welcomeSub: {fontSize: 13, color: 'rgba(255,255,255,0.6)'},
   statsGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16},
-  statCard: {width: '47%', borderRadius: 12, padding: 14, borderWidth: 1, gap: 6},
+  statCard: {
+    width: '47%', borderRadius: 12, padding: 14, gap: 6,
+    backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#ece5d3',
+    borderLeftWidth: 4, borderLeftColor: '#B8960A',
+  },
   statVal: {fontSize: 26, fontWeight: '700'},
   statLbl: {fontSize: 12, color: '#6b7280', fontWeight: '500'},
   quickGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16},
-  quickBtn: {width: '47%', backgroundColor: '#ffffff', borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#ede9fe', gap: 10},
-  quickIconBox: {width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center'},
-  quickLbl: {fontSize: 13, fontWeight: '600', color: '#1e1b4b', textAlign: 'center'},
-  subTabRow: {flexDirection: 'row', backgroundColor: '#ffffff', borderRadius: 12, padding: 4, marginBottom: 14, borderWidth: 1, borderColor: '#ede9fe'},
+  quickBtn: {width: '47%', backgroundColor: '#ffffff', borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#ece5d3', gap: 10},
+  quickIconBox: {width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fdf8ee'},
+  quickLbl: {fontSize: 13, fontWeight: '600', color: '#0d1f3c', textAlign: 'center'},
+  subTabRow: {flexDirection: 'row', backgroundColor: '#ffffff', borderRadius: 12, padding: 4, marginBottom: 14, borderWidth: 1, borderColor: '#ece5d3'},
   subTab: {flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 10},
-  subTabOn: {backgroundColor: '#7c3aed'},
+  subTabOn: {backgroundColor: '#0d1f3c'},
   subTabTxt: {fontSize: 13, fontWeight: '500', color: '#9ca3af'},
-  subTabTxtOn: {color: '#ffffff', fontWeight: '700'},
+  subTabTxtOn: {color: '#C9A84C', fontWeight: '700'},
   searchRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: '#ffffff', borderRadius: 12, padding: 12,
-    borderWidth: 1, borderColor: '#ede9fe', marginBottom: 12,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 12,
   },
-  searchInput: {flex: 1, fontSize: 14, color: '#1e1b4b'},
+  searchInput: {flex: 1, fontSize: 14, color: '#0d1f3c'},
   emptyBox: {alignItems: 'center', paddingVertical: 40, gap: 10},
   emptyTxt: {fontSize: 14, color: '#9ca3af', fontWeight: '500'},
   categoryBlock: {marginBottom: 8},
   categoryHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#ffffff', borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: '#ede9fe', marginBottom: 4,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 4,
   },
-  categoryTitle: {fontSize: 15, fontWeight: '700', color: '#1e1b4b'},
+  categoryTitle: {fontSize: 15, fontWeight: '700', color: '#0d1f3c'},
   categoryRight: {flexDirection: 'row', alignItems: 'center', gap: 8},
-  categoryCount: {fontSize: 12, color: '#7c3aed', fontWeight: '600'},
+  categoryCount: {fontSize: 12, color: '#B8960A', fontWeight: '600'},
   classBlock: {marginLeft: 12, marginBottom: 6},
   classBlockTitle: {
     fontSize: 12, fontWeight: '700', color: '#6b7280',
@@ -1820,67 +1823,67 @@ const styles = StyleSheet.create({
   },
   studentCard: {
     backgroundColor: '#ffffff', borderRadius: 10, padding: 12,
-    marginBottom: 6, borderWidth: 1, borderColor: '#ede9fe',
+    marginBottom: 6, borderWidth: 1, borderColor: '#ece5d3',
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
   studentCardLeft: {flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1},
   studentAv: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#f5f3ff', borderWidth: 1.5, borderColor: '#7c3aed',
+    backgroundColor: '#fdf8ee', borderWidth: 1.5, borderColor: '#B8960A',
     alignItems: 'center', justifyContent: 'center',
   },
-  studentAvTxt: {fontSize: 11, fontWeight: '700', color: '#7c3aed'},
-  studentName: {fontSize: 13, fontWeight: '600', color: '#1e1b4b'},
+  studentAvTxt: {fontSize: 11, fontWeight: '700', color: '#B8960A'},
+  studentName: {fontSize: 13, fontWeight: '600', color: '#0d1f3c'},
   studentMeta: {fontSize: 11, color: '#9ca3af', marginTop: 1},
   teacherActions: {flexDirection: 'row', alignItems: 'center', gap: 10},
   editClassesBtn: {
     width: 32, height: 32, borderRadius: 8,
-    backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ede9fe',
+    backgroundColor: '#fdf8ee', borderWidth: 1, borderColor: '#ece5d3',
     alignItems: 'center', justifyContent: 'center',
   },
-  sectionTitle: {fontSize: 17, fontWeight: '700', color: '#1e1b4b', marginBottom: 10},
-  fieldLabel: {fontSize: 11, fontWeight: '600', color: '#7c3aed', letterSpacing: 2, marginBottom: 8},
-  clsChip: {borderWidth: 1, borderColor: '#ede9fe', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: '#ffffff', marginRight: 6},
-  clsChipOn: {borderColor: '#7c3aed', backgroundColor: '#f5f3ff'},
+  sectionTitle: {fontSize: 17, fontWeight: '700', color: '#0d1f3c', marginBottom: 10},
+  fieldLabel: {fontSize: 11, fontWeight: '600', color: '#B8960A', letterSpacing: 2, marginBottom: 8},
+  clsChip: {borderWidth: 1, borderColor: '#ece5d3', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: '#ffffff', marginRight: 6},
+  clsChipOn: {borderColor: '#B8960A', backgroundColor: '#fdf8ee'},
   clsChipTxt: {fontSize: 12, fontWeight: '500', color: '#6b7280'},
-  clsChipTxtOn: {color: '#7c3aed', fontWeight: '700'},
-  card: {backgroundColor: '#ffffff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#ede9fe'},
-  input: {backgroundColor: '#f5f3ff', borderWidth: 1.5, borderColor: '#ede9fe', borderRadius: 10, padding: 13, fontSize: 14, color: '#1e1b4b', fontWeight: '500'},
+  clsChipTxtOn: {color: '#B8960A', fontWeight: '700'},
+  card: {backgroundColor: '#ffffff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#ece5d3'},
+  input: {backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#ece5d3', borderRadius: 10, padding: 13, fontSize: 14, color: '#0d1f3c', fontWeight: '500'},
   inputHint: {fontSize: 11, color: '#9ca3af', marginTop: 4},
   selectedBadge: {flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#f0fdf4', borderRadius: 8, padding: 10, marginTop: 12, borderWidth: 1, borderColor: '#bbf7d0'},
   selectedBadgeTxt: {fontSize: 13, color: '#16a34a', fontWeight: '600'},
-  addBtn: {backgroundColor: '#7c3aed', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 16},
-  addBtnDisabled: {backgroundColor: '#c4b5fd'},
+  addBtn: {backgroundColor: '#0d1f3c', borderRadius: 10, padding: 14, alignItems: 'center', marginTop: 16},
+  addBtnDisabled: {backgroundColor: '#9ca3af'},
   btnInner: {flexDirection: 'row', alignItems: 'center', gap: 8},
-  addBtnTxt: {color: '#ffffff', fontSize: 14, fontWeight: '700'},
+  addBtnTxt: {color: '#C9A84C', fontSize: 14, fontWeight: '700'},
   infoCard: {backgroundColor: '#fffbeb', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#fde68a', marginBottom: 16},
   infoTxt: {fontSize: 13, color: '#92400e', lineHeight: 20},
-  importTitle: {fontSize: 16, fontWeight: '700', color: '#1e1b4b', marginBottom: 8},
+  importTitle: {fontSize: 16, fontWeight: '700', color: '#0d1f3c', marginBottom: 8},
   importDesc: {fontSize: 13, color: '#6b7280', lineHeight: 20, marginBottom: 14},
-  excelFormat: {backgroundColor: '#f5f3ff', borderRadius: 10, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#ede9fe'},
-  excelFormatTitle: {fontSize: 12, fontWeight: '700', color: '#7c3aed', marginBottom: 6},
+  excelFormat: {backgroundColor: '#fdf8ee', borderRadius: 10, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#ece5d3'},
+  excelFormatTitle: {fontSize: 12, fontWeight: '700', color: '#B8960A', marginBottom: 6},
   excelCol: {fontSize: 12, color: '#6b7280', marginBottom: 4, lineHeight: 18},
   progressBox: {flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0fdf4', borderRadius: 10, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#bbf7d0'},
   progressTxt: {fontSize: 13, color: '#16a34a', fontWeight: '600', flex: 1},
   modalOverlay: {flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20},
   modalBox: {backgroundColor: '#ffffff', borderRadius: 16, padding: 20, width: '100%', maxWidth: 360},
   modalHeader: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16},
-  modalTitle: {fontSize: 16, fontWeight: '700', color: '#1e1b4b'},
+  modalTitle: {fontSize: 16, fontWeight: '700', color: '#0d1f3c'},
   modalSub: {fontSize: 12, color: '#9ca3af', marginBottom: 14},
   modalRow: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6'},
   modalLabel: {fontSize: 12, color: '#6b7280', fontWeight: '500'},
-  modalValue: {fontSize: 12, color: '#1e1b4b', fontWeight: '600', flex: 1, textAlign: 'right'},
-  modalHighlight: {color: '#7c3aed', fontSize: 14},
-  modalCloseBtn: {backgroundColor: '#1e1b4b', borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 8},
-  modalCloseTxt: {color: '#ffffff', fontSize: 14, fontWeight: '700'},
+  modalValue: {fontSize: 12, color: '#0d1f3c', fontWeight: '600', flex: 1, textAlign: 'right'},
+  modalHighlight: {color: '#B8960A', fontSize: 14},
+  modalCloseBtn: {backgroundColor: '#0d1f3c', borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 8},
+  modalCloseTxt: {color: '#C9A84C', fontSize: 14, fontWeight: '700'},
   classCatTitle: {fontSize: 12, fontWeight: '700', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8},
   classChipGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 8},
-  classChip: {borderWidth: 1, borderColor: '#ede9fe', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#ffffff'},
-  classChipOn: {borderColor: '#7c3aed', backgroundColor: '#f5f3ff'},
+  classChip: {borderWidth: 1, borderColor: '#ece5d3', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#ffffff'},
+  classChipOn: {borderColor: '#B8960A', backgroundColor: '#fdf8ee'},
   classChipTxt: {fontSize: 12, fontWeight: '500', color: '#6b7280'},
-  classChipTxtOn: {color: '#7c3aed', fontWeight: '700'},
-  selectedCount: {backgroundColor: '#f5f3ff', borderRadius: 8, padding: 10, marginTop: 8, marginBottom: 8, alignItems: 'center'},
-  selectedCountTxt: {fontSize: 13, color: '#7c3aed', fontWeight: '600'},
+  classChipTxtOn: {color: '#B8960A', fontWeight: '700'},
+  selectedCount: {backgroundColor: '#fdf8ee', borderRadius: 8, padding: 10, marginTop: 8, marginBottom: 8, alignItems: 'center'},
+  selectedCountTxt: {fontSize: 13, color: '#B8960A', fontWeight: '600'},
 
   // ── REPORTS STYLES ──
   rptSummaryRow: {flexDirection: 'row', gap: 10, marginBottom: 6},
@@ -1890,10 +1893,10 @@ const styles = StyleSheet.create({
   rptNote: {fontSize: 11, color: '#9ca3af', marginBottom: 10, lineHeight: 16},
   rptClassRow: {
     backgroundColor: '#ffffff', borderRadius: 12, padding: 14,
-    marginBottom: 8, borderWidth: 1, borderColor: '#ede9fe',
+    marginBottom: 8, borderWidth: 1, borderColor: '#ece5d3',
   },
   rptClassTop: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8},
-  rptClassName: {fontSize: 13, fontWeight: '600', color: '#1e1b4b'},
+  rptClassName: {fontSize: 13, fontWeight: '600', color: '#0d1f3c'},
   rptClassPct: {fontSize: 14, fontWeight: '700'},
   rptBarBg: {height: 6, backgroundColor: '#f3f4f6', borderRadius: 3, overflow: 'hidden', marginBottom: 6},
   rptBarFill: {height: 6, borderRadius: 3},
@@ -1915,7 +1918,7 @@ const styles = StyleSheet.create({
   rptEmptyGreenTxt: {fontSize: 13, color: '#16a34a', fontWeight: '600'},
   rptTeacherRow: {
     backgroundColor: '#ffffff', borderRadius: 10, padding: 12,
-    marginBottom: 6, borderWidth: 1, borderColor: '#ede9fe',
+    marginBottom: 6, borderWidth: 1, borderColor: '#ece5d3',
     flexDirection: 'row', alignItems: 'center', gap: 10,
   },
   rptAttBtnGroup: {flexDirection: 'row', gap: 6},
