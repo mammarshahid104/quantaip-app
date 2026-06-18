@@ -21,6 +21,7 @@ import {
 } from 'react-native-heroicons/outline';
 
 import {SCHOOL_CODE} from '../config';
+import {theme} from '../theme';
 
 const CLASS_HIERARCHY = [
   {category: 'Early Education', classes: ['Nursery', 'Prep', 'KG']},
@@ -191,7 +192,7 @@ export default function ClassesScreen() {
                     <Text style={styles.teacherSub}>{t.subject} · {t.id}</Text>
                   </View>
                   {classIncharge === t.id && (
-                    <CheckCircleIcon size={20} color="#7c3aed" />
+                    <CheckCircleIcon size={20} color="#B8960A" />
                   )}
                 </TouchableOpacity>
               ))}
@@ -212,7 +213,7 @@ export default function ClassesScreen() {
                 onPress={() => loadSections(cls)}>
                 <BuildingLibraryIcon
                   size={14}
-                  color={selectedClass === cls ? '#7c3aed' : '#9ca3af'}
+                  color={selectedClass === cls ? '#B8960A' : '#9ca3af'}
                 />
                 <Text style={[
                   styles.classCardTxt,
@@ -265,11 +266,11 @@ export default function ClassesScreen() {
           {/* SECTIONS */}
           <View style={styles.sectionBox}>
             <Text style={styles.sectionTitle}>
-              Sections — <Text style={{color: '#7c3aed'}}>{selectedClass}</Text>
+              Sections — <Text style={{color: '#B8960A'}}>{selectedClass}</Text>
             </Text>
 
             {loading ? (
-              <ActivityIndicator color="#7c3aed" style={{marginVertical: 10}} />
+              <ActivityIndicator color="#B8960A" style={{marginVertical: 10}} />
             ) : sections.length === 0 ? (
               <Text style={styles.noSections}>No sections yet — add one below!</Text>
             ) : (
@@ -289,7 +290,7 @@ export default function ClassesScreen() {
               <TextInput
                 style={styles.sectionInput}
                 placeholder="Section name (e.g. A, Red, Blue)"
-                placeholderTextColor="#c4b5fd"
+                placeholderTextColor="#b8a88a"
                 value={newSection}
                 onChangeText={setNewSection}
                 autoCapitalize="words"
@@ -303,7 +304,7 @@ export default function ClassesScreen() {
         </View>
       ) : (
         <View style={styles.hintBox}>
-          <BuildingLibraryIcon size={32} color="#c4b5fd" />
+          <BuildingLibraryIcon size={32} color="#b8a88a" />
           <Text style={styles.hintTxt}>Select a class to manage</Text>
         </View>
       )}
@@ -323,69 +324,69 @@ const styles = StyleSheet.create({
   classGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 8},
   classCard: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderWidth: 1.5, borderColor: '#ede9fe', borderRadius: 10,
+    borderWidth: 1.5, borderColor: '#ece5d3', borderRadius: 10,
     paddingHorizontal: 14, paddingVertical: 9, backgroundColor: '#ffffff',
   },
-  classCardOn: {borderColor: '#7c3aed', backgroundColor: '#f5f3ff'},
+  classCardOn: {borderColor: '#B8960A', backgroundColor: '#fdf8ee'},
   classCardTxt: {fontSize: 13, fontWeight: '500', color: '#6b7280'},
-  classCardTxtOn: {color: '#7c3aed', fontWeight: '700'},
+  classCardTxtOn: {color: '#B8960A', fontWeight: '700'},
   inchargeBox: {
     backgroundColor: '#ffffff', borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: '#ede9fe', marginBottom: 12,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 12,
   },
-  inchargeTitle: {fontSize: 15, fontWeight: '700', color: '#1e1b4b', marginBottom: 12},
+  inchargeTitle: {fontSize: 15, fontWeight: '700', color: '#0d1f3c', marginBottom: 12},
   inchargeRow: {flexDirection: 'row', alignItems: 'center', gap: 10},
   inchargeAv: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#f5f3ff', borderWidth: 2, borderColor: '#7c3aed',
+    backgroundColor: '#fdf8ee', borderWidth: 2, borderColor: '#B8960A',
     alignItems: 'center', justifyContent: 'center',
   },
-  inchargeAvTxt: {fontSize: 13, fontWeight: '700', color: '#7c3aed'},
+  inchargeAvTxt: {fontSize: 13, fontWeight: '700', color: '#B8960A'},
   inchargeInfo: {flex: 1},
-  inchargeName: {fontSize: 14, fontWeight: '700', color: '#1e1b4b'},
+  inchargeName: {fontSize: 14, fontWeight: '700', color: '#0d1f3c'},
   inchargeId: {fontSize: 11, color: '#9ca3af', marginTop: 2},
   changeBtn: {
-    backgroundColor: '#f5f3ff', borderRadius: 8,
+    backgroundColor: '#fdf8ee', borderRadius: 8,
     paddingHorizontal: 10, paddingVertical: 6,
-    borderWidth: 1, borderColor: '#ede9fe',
+    borderWidth: 1, borderColor: '#ece5d3',
   },
-  changeBtnTxt: {fontSize: 12, fontWeight: '600', color: '#7c3aed'},
+  changeBtnTxt: {fontSize: 12, fontWeight: '600', color: '#B8960A'},
   removeBtn: {padding: 6},
   assignBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#7c3aed', borderRadius: 10,
+    backgroundColor: '#0d1f3c', borderRadius: 10,
     padding: 12, justifyContent: 'center',
   },
-  assignBtnTxt: {color: '#ffffff', fontSize: 14, fontWeight: '700'},
+  assignBtnTxt: {color: '#C9A84C', fontSize: 14, fontWeight: '700'},
   sectionBox: {
     backgroundColor: '#ffffff', borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: '#ede9fe', marginBottom: 12,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 12,
   },
-  sectionTitle: {fontSize: 16, fontWeight: '700', color: '#1e1b4b', marginBottom: 12},
+  sectionTitle: {fontSize: 16, fontWeight: '700', color: '#0d1f3c', marginBottom: 12},
   noSections: {fontSize: 13, color: '#9ca3af', fontStyle: 'italic', marginBottom: 12},
   sectionList: {marginBottom: 12},
   sectionItem: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
   },
-  sectionName: {fontSize: 14, fontWeight: '600', color: '#1e1b4b'},
+  sectionName: {fontSize: 14, fontWeight: '600', color: '#0d1f3c'},
   deleteBtn: {padding: 4},
   addRow: {flexDirection: 'row', gap: 8, alignItems: 'center'},
   sectionInput: {
-    flex: 1, backgroundColor: '#f5f3ff', borderWidth: 1.5, borderColor: '#ede9fe',
-    borderRadius: 10, padding: 11, fontSize: 14, color: '#1e1b4b',
+    flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#ece5d3',
+    borderRadius: 10, padding: 11, fontSize: 14, color: '#0d1f3c',
   },
   addBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#7c3aed', borderRadius: 10,
+    backgroundColor: '#0d1f3c', borderRadius: 10,
     paddingHorizontal: 14, paddingVertical: 11,
   },
-  addBtnTxt: {color: '#ffffff', fontSize: 13, fontWeight: '700'},
+  addBtnTxt: {color: '#C9A84C', fontSize: 13, fontWeight: '700'},
   hintBox: {
-    backgroundColor: '#f5f3ff', borderRadius: 12, padding: 24,
-    borderWidth: 1, borderColor: '#ede9fe', alignItems: 'center', gap: 10,
+    backgroundColor: '#fdf8ee', borderRadius: 12, padding: 24,
+    borderWidth: 1, borderColor: '#ece5d3', alignItems: 'center', gap: 10,
   },
-  hintTxt: {fontSize: 13, color: '#7c3aed', fontWeight: '500', textAlign: 'center'},
+  hintTxt: {fontSize: 13, color: '#B8960A', fontWeight: '500', textAlign: 'center'},
   // MODAL
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
@@ -399,7 +400,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 4,
   },
-  modalTitle: {fontSize: 16, fontWeight: '700', color: '#1e1b4b'},
+  modalTitle: {fontSize: 16, fontWeight: '700', color: '#0d1f3c'},
   modalSub: {fontSize: 12, color: '#9ca3af', marginBottom: 14},
   teacherList: {maxHeight: 300},
   teacherItem: {
@@ -408,11 +409,11 @@ const styles = StyleSheet.create({
   },
   teacherAv: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#f5f3ff', borderWidth: 1.5, borderColor: '#7c3aed',
+    backgroundColor: '#fdf8ee', borderWidth: 1.5, borderColor: '#B8960A',
     alignItems: 'center', justifyContent: 'center',
   },
-  teacherAvTxt: {fontSize: 11, fontWeight: '700', color: '#7c3aed'},
+  teacherAvTxt: {fontSize: 11, fontWeight: '700', color: '#B8960A'},
   teacherInfo: {flex: 1},
-  teacherName: {fontSize: 14, fontWeight: '600', color: '#1e1b4b'},
+  teacherName: {fontSize: 14, fontWeight: '600', color: '#0d1f3c'},
   teacherSub: {fontSize: 11, color: '#9ca3af', marginTop: 1},
 });
