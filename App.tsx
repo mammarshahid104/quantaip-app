@@ -121,7 +121,7 @@ function LoginScreen({navigation}: any) {
         {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.lockIcon}>
-            <LockClosedIcon size={28} color={theme.colors.gold} />
+            <LockClosedIcon size={28} color="#B8960A" />
           </View>
           <Text style={styles.headerEye}>SECURE LOGIN</Text>
           <Text style={styles.headerTitle}>
@@ -154,7 +154,7 @@ function LoginScreen({navigation}: any) {
           {/* ID Field */}
           <Text style={styles.fieldLabel}>YOUR ID</Text>
           <View style={styles.inputWrap}>
-            <UserIcon size={18} color={theme.colors.gold} />
+            <UserIcon size={18} color="#B8960A" />
             <TextInput
               style={styles.input}
               placeholder="e.g. GHS-001-STU-0001"
@@ -172,7 +172,7 @@ function LoginScreen({navigation}: any) {
           {/* Password Field */}
           <Text style={[styles.fieldLabel, {marginTop: 14}]}>PASSWORD</Text>
           <View style={styles.inputWrap}>
-            <LockClosedIcon size={18} color={theme.colors.gold} />
+            <LockClosedIcon size={18} color="#B8960A" />
             <TextInput
               style={styles.input}
               placeholder="Enter your password"
@@ -208,13 +208,13 @@ function LoginScreen({navigation}: any) {
             disabled={!detectedRole || loading}
             activeOpacity={0.8}>
             {loading ? (
-              <ActivityIndicator color={theme.colors.gold} />
+              <ActivityIndicator color="#D4AF37" />
             ) : (
               <View style={styles.loginBtnInner}>
                 <Text style={styles.loginBtnTxt}>
                   {detectedRole ? 'Sign In' : 'Enter your ID first'}
                 </Text>
-                {detectedRole && <ArrowRightIcon size={18} color={theme.colors.gold} />}
+                {detectedRole && <ArrowRightIcon size={18} color="#D4AF37" />}
               </View>
             )}
           </TouchableOpacity>
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   brand: {fontSize: 20, fontWeight: '700', color: theme.colors.textOnDark, letterSpacing: 2},
-  brandAccent: {color: theme.colors.gold},
+  brandAccent: {color: '#B8960A'},
   navSub: {fontSize: 9, letterSpacing: 3, color: theme.colors.textOnDarkMuted},
   scroll: {padding: 16, paddingBottom: 40},
   header: {alignItems: 'center', marginVertical: 24},
@@ -266,9 +266,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.goldLight, borderWidth: 1, borderColor: theme.colors.goldBorder,
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  headerEye: {fontSize: 10, letterSpacing: 4, color: theme.colors.gold, fontWeight: '600', marginBottom: 8},
+  headerEye: {fontSize: 10, letterSpacing: 4, color: '#B8960A', fontWeight: '600', marginBottom: 8},
   headerTitle: {fontSize: 32, fontWeight: '700', color: theme.colors.navy, marginBottom: 6},
-  headerAccent: {color: theme.colors.gold},
+  headerAccent: {color: '#B8960A'},
   headerSub: {fontSize: 14, color: theme.colors.textMuted},
   roleBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.white, borderRadius: 16, padding: 16,
     marginBottom: 14, borderWidth: 1, borderColor: theme.colors.warmBorder,
   },
-  fieldLabel: {fontSize: 11, fontWeight: '600', color: theme.colors.gold, letterSpacing: 2, marginBottom: 10},
+  fieldLabel: {fontSize: 11, fontWeight: '600', color: '#B8960A', letterSpacing: 2, marginBottom: 10},
   inputWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: theme.colors.white, borderWidth: 1.5, borderColor: theme.colors.warmBorder,
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   },
   loginBtnDisabled: {backgroundColor: '#9ca3af'},
   loginBtnInner: {flexDirection: 'row', alignItems: 'center', gap: 8},
-  loginBtnTxt: {color: theme.colors.gold, fontSize: 15, fontWeight: '700'},
+  loginBtnTxt: {color: '#D4AF37', fontSize: 15, fontWeight: '700'},
   footerRow: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'center', gap: 4, marginBottom: 10,
