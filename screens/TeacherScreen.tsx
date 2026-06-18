@@ -419,18 +419,6 @@ export default function TeacherScreen({navigation}: any) {
         </View>
       )}
 
-      {/* TABS */}
-      <View style={styles.tabRow}>
-        {TABS.map(({key, icon: TabIcon}) => (
-          <TouchableOpacity key={key}
-            style={[styles.tab, tab === key && styles.tabOn]}
-            onPress={() => setTab(key)}>
-            <TabIcon size={15} color={tab === key ? '#B8960A' : '#9ca3af'} />
-            <Text style={[styles.tabTxt, tab === key && styles.tabTxtOn]}>{key}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       {/* ── ATTENDANCE TAB ── */}
       {tab === 'Attendance' && (
         <View style={styles.flex}>
@@ -968,6 +956,19 @@ export default function TeacherScreen({navigation}: any) {
           )}
         </ScrollView>
       )}
+
+      {/* BOTTOM TAB BAR */}
+      <View style={styles.bottomBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.bottomBarContent}>
+          {TABS.map(({key, icon: TabIcon}) => (
+            <TouchableOpacity key={key} style={styles.bottomTab} onPress={() => setTab(key)}>
+              <TabIcon size={22} color={tab === key ? '#B8960A' : '#94a3b8'} />
+              <Text style={[styles.bottomTabTxt, tab === key && styles.bottomTabTxtOn]}>{key}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
     </View>
   );
 }
@@ -996,17 +997,12 @@ const styles = StyleSheet.create({
   teacherAvTxt: {fontSize: 13, fontWeight: '700', color: '#B8960A'},
   teacherName: {fontSize: 15, fontWeight: '700', color: '#0d1f3c'},
   teacherMeta: {fontSize: 12, color: '#6b7280', marginTop: 1},
-  tabRow: {
-    flexDirection: 'row', backgroundColor: '#ffffff',
-    borderBottomWidth: 1, borderBottomColor: '#ece5d3',
-  },
-  tab: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 5, paddingVertical: 11, borderBottomWidth: 2, borderBottomColor: 'transparent',
-  },
-  tabOn: {borderBottomColor: '#B8960A'},
-  tabTxt: {fontSize: 12, fontWeight: '500', color: '#9ca3af'},
-  tabTxtOn: {color: '#B8960A', fontWeight: '700'},
+  // ── BOTTOM TAB BAR ──
+  bottomBar: {backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#ece5d3'},
+  bottomBarContent: {paddingHorizontal: 4, paddingVertical: 6},
+  bottomTab: {alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 4, gap: 2, minWidth: 70},
+  bottomTabTxt: {fontSize: 10, fontWeight: '500', color: '#94a3b8'},
+  bottomTabTxtOn: {color: '#B8960A', fontWeight: '700'},
   content: {flex: 1, paddingHorizontal: 14, paddingTop: 14},
   sectionTitle: {fontSize: 17, fontWeight: '700', color: '#0d1f3c', marginBottom: 12},
   stepHeader: {flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12},
