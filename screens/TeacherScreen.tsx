@@ -28,6 +28,7 @@ import {
 } from 'react-native-heroicons/outline';
 
 import {SCHOOL_CODE} from '../config';
+import {theme} from '../theme';
 
 const TEST_TYPES = [
   {key: 'weekly', label: 'Weekly Test'},
@@ -424,7 +425,7 @@ export default function TeacherScreen({navigation}: any) {
           <TouchableOpacity key={key}
             style={[styles.tab, tab === key && styles.tabOn]}
             onPress={() => setTab(key)}>
-            <TabIcon size={15} color={tab === key ? '#7c3aed' : '#9ca3af'} />
+            <TabIcon size={15} color={tab === key ? '#B8960A' : '#9ca3af'} />
             <Text style={[styles.tabTxt, tab === key && styles.tabTxtOn]}>{key}</Text>
           </TouchableOpacity>
         ))}
@@ -440,7 +441,7 @@ export default function TeacherScreen({navigation}: any) {
                 <TouchableOpacity key={i} style={styles.classBtn}
                   onPress={() => loadAttStudents(cls)}>
                   <View style={styles.classBtnLeft}>
-                    <BookOpenIcon size={20} color="#7c3aed" />
+                    <BookOpenIcon size={20} color="#B8960A" />
                     <View>
                       <Text style={styles.classBtnTxt}>{cls}</Text>
                       <Text style={styles.classBtnSub}>Class Incharge · {today}</Text>
@@ -498,7 +499,7 @@ export default function TeacherScreen({navigation}: any) {
                 </View>
               </View>
               {loadingAtt ? (
-                <ActivityIndicator color="#7c3aed" size="large" style={{marginTop: 30}} />
+                <ActivityIndicator color="#B8960A" size="large" style={{marginTop: 30}} />
               ) : (
                 <ScrollView style={styles.content}>
                   {attStudents.map((s, i) => {
@@ -576,7 +577,7 @@ export default function TeacherScreen({navigation}: any) {
                   <Text style={[styles.testTypeTxt, testType === t.key && styles.testTypeTxtOn]}>
                     {t.label}
                   </Text>
-                  {testType === t.key && <CheckCircleIcon size={18} color="#7c3aed" />}
+                  {testType === t.key && <CheckCircleIcon size={18} color="#B8960A" />}
                 </TouchableOpacity>
               ))}
 
@@ -584,7 +585,7 @@ export default function TeacherScreen({navigation}: any) {
               <TextInput
                 style={styles.marksInput}
                 placeholder="e.g. 20"
-                placeholderTextColor="#c4b5fd"
+                placeholderTextColor="#b8a88a"
                 keyboardType="number-pad"
                 value={totalMarks}
                 onChangeText={setTotalMarks}
@@ -617,7 +618,7 @@ export default function TeacherScreen({navigation}: any) {
 
               {classes.length === 0 ? (
                 <View style={styles.emptyBox}>
-                  <BookOpenIcon size={40} color="#c4b5fd" />
+                  <BookOpenIcon size={40} color="#b8a88a" />
                   <Text style={styles.emptyTxt}>No classes assigned</Text>
                 </View>
               ) : (
@@ -625,7 +626,7 @@ export default function TeacherScreen({navigation}: any) {
                   <TouchableOpacity key={i} style={styles.classBtn}
                     onPress={() => loadMarksStudents(cls)}>
                     <View style={styles.classBtnLeft}>
-                      <AcademicCapIcon size={20} color="#7c3aed" />
+                      <AcademicCapIcon size={20} color="#B8960A" />
                       <Text style={styles.classBtnTxt}>{cls}</Text>
                     </View>
                     <ChartBarIcon size={18} color="#9ca3af" />
@@ -652,7 +653,7 @@ export default function TeacherScreen({navigation}: any) {
               </View>
 
               {loadingMarks ? (
-                <ActivityIndicator color="#7c3aed" size="large" style={{marginTop: 30}} />
+                <ActivityIndicator color="#B8960A" size="large" style={{marginTop: 30}} />
               ) : (
                 marksStudents.map((s, i) => {
                   const obtained = marks[s.id] || '';
@@ -677,7 +678,7 @@ export default function TeacherScreen({navigation}: any) {
                         <TextInput
                           style={[styles.marksInputSmall, isOver && {borderColor: '#ef4444'}]}
                           placeholder="0"
-                          placeholderTextColor="#c4b5fd"
+                          placeholderTextColor="#b8a88a"
                           keyboardType="number-pad"
                           value={obtained}
                           onChangeText={val => setMarks(prev => ({...prev, [s.id]: val}))}
@@ -714,13 +715,13 @@ export default function TeacherScreen({navigation}: any) {
               <TouchableOpacity key={i}
                 style={{
                   paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
-                  backgroundColor: hwClass === cls ? '#d97706' : '#ffffff',
-                  borderWidth: 1, borderColor: hwClass === cls ? '#d97706' : '#ede9fe',
+                  backgroundColor: hwClass === cls ? '#0d1f3c' : '#ffffff',
+                  borderWidth: 1, borderColor: hwClass === cls ? '#0d1f3c' : '#ece5d3',
                 }}
                 onPress={() => loadHomework(cls)}>
                 <Text style={{
                   fontSize: 12, fontWeight: '600',
-                  color: hwClass === cls ? '#ffffff' : '#6b7280',
+                  color: hwClass === cls ? '#C9A84C' : '#6b7280',
                 }}>{cls}</Text>
               </TouchableOpacity>
             ))}
@@ -731,63 +732,63 @@ export default function TeacherScreen({navigation}: any) {
               {/* Assign form */}
               <View style={{
                 backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
-                borderWidth: 1, borderColor: '#ede9fe', marginBottom: 16,
+                borderWidth: 1, borderColor: '#ece5d3', marginBottom: 16,
               }}>
                 <TextInput
                   style={{
-                    borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
+                    borderWidth: 1, borderColor: '#ece5d3', borderRadius: 8,
                     paddingHorizontal: 12, paddingVertical: 8, fontSize: 13,
-                    color: '#1e1b4b', marginBottom: 8,
+                    color: '#0d1f3c', marginBottom: 8,
                   }}
                   placeholder="Subject (e.g. Physics)"
-                  placeholderTextColor="#c4b5fd"
+                  placeholderTextColor="#b8a88a"
                   value={hwSubject}
                   onChangeText={setHwSubject}
                 />
                 <TextInput
                   style={{
-                    borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
+                    borderWidth: 1, borderColor: '#ece5d3', borderRadius: 8,
                     paddingHorizontal: 12, paddingVertical: 8, fontSize: 13,
-                    color: '#1e1b4b', marginBottom: 8,
+                    color: '#0d1f3c', marginBottom: 8,
                   }}
                   placeholder="Title (e.g. Chapter 15 Exercise)"
-                  placeholderTextColor="#c4b5fd"
+                  placeholderTextColor="#b8a88a"
                   value={hwTitle}
                   onChangeText={setHwTitle}
                 />
                 <TextInput
                   style={{
-                    borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
+                    borderWidth: 1, borderColor: '#ece5d3', borderRadius: 8,
                     paddingHorizontal: 12, paddingVertical: 8, fontSize: 13,
-                    color: '#1e1b4b', marginBottom: 8, minHeight: 70,
+                    color: '#0d1f3c', marginBottom: 8, minHeight: 70,
                     textAlignVertical: 'top',
                   }}
                   placeholder="Details (e.g. Solve Q1 to Q5 from exercise)"
-                  placeholderTextColor="#c4b5fd"
+                  placeholderTextColor="#b8a88a"
                   value={hwDesc}
                   onChangeText={setHwDesc}
                   multiline
                 />
                 <TextInput
                   style={{
-                    borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8,
+                    borderWidth: 1, borderColor: '#ece5d3', borderRadius: 8,
                     paddingHorizontal: 12, paddingVertical: 8, fontSize: 13,
-                    color: '#1e1b4b', marginBottom: 12,
+                    color: '#0d1f3c', marginBottom: 12,
                   }}
                   placeholder="Due date (YYYY-MM-DD)"
-                  placeholderTextColor="#c4b5fd"
+                  placeholderTextColor="#b8a88a"
                   value={hwDue}
                   onChangeText={setHwDue}
                 />
                 <TouchableOpacity
                   style={{
-                    backgroundColor: '#d97706', borderRadius: 10,
+                    backgroundColor: '#0d1f3c', borderRadius: 10,
                     padding: 13, alignItems: 'center',
                   }}
                   disabled={assigningHW}
                   onPress={assignHomework}>
-                  {assigningHW ? <ActivityIndicator color="#ffffff" /> : (
-                    <Text style={{color: '#ffffff', fontSize: 14, fontWeight: '700'}}>
+                  {assigningHW ? <ActivityIndicator color="#C9A84C" /> : (
+                    <Text style={{color: '#C9A84C', fontSize: 14, fontWeight: '700'}}>
                       Assign to {hwClass}
                     </Text>
                   )}
@@ -796,7 +797,7 @@ export default function TeacherScreen({navigation}: any) {
 
               {/* Recent homework list */}
               <Text style={styles.sectionTitle}>Recent — {hwClass}</Text>
-              {loadingHW && <ActivityIndicator color="#d97706" style={{marginVertical: 16}} />}
+              {loadingHW && <ActivityIndicator color="#B8960A" style={{marginVertical: 16}} />}
               {!loadingHW && hwList.length === 0 && (
                 <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 12}}>
                   No homework assigned yet.
@@ -805,13 +806,13 @@ export default function TeacherScreen({navigation}: any) {
               {!loadingHW && hwList.map((hw: any, i: number) => (
                 <View key={i} style={{
                   backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
-                  borderWidth: 1, borderColor: '#ede9fe', marginBottom: 8,
+                  borderWidth: 1, borderColor: '#ece5d3', marginBottom: 8,
                 }}>
                   <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
-                    <Text style={{fontSize: 11, fontWeight: '700', color: '#d97706'}}>{hw.subject}</Text>
+                    <Text style={{fontSize: 11, fontWeight: '700', color: '#B8960A'}}>{hw.subject}</Text>
                     <Text style={{fontSize: 11, color: '#9ca3af'}}>Due: {hw.dueDate}</Text>
                   </View>
-                  <Text style={{fontSize: 14, fontWeight: '600', color: '#1e1b4b', marginTop: 4}}>{hw.title}</Text>
+                  <Text style={{fontSize: 14, fontWeight: '600', color: '#0d1f3c', marginTop: 4}}>{hw.title}</Text>
                   {hw.description ? (
                     <Text style={{fontSize: 12, color: '#6b7280', marginTop: 2}}>{hw.description}</Text>
                   ) : null}
@@ -841,13 +842,13 @@ export default function TeacherScreen({navigation}: any) {
               <TouchableOpacity key={i}
                 style={{
                   paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
-                  backgroundColor: ttClass === cls ? '#059669' : '#ffffff',
-                  borderWidth: 1, borderColor: ttClass === cls ? '#059669' : '#ede9fe',
+                  backgroundColor: ttClass === cls ? '#0d1f3c' : '#ffffff',
+                  borderWidth: 1, borderColor: ttClass === cls ? '#0d1f3c' : '#ece5d3',
                 }}
                 onPress={() => loadTeacherTimetable(cls)}>
                 <Text style={{
                   fontSize: 12, fontWeight: '600',
-                  color: ttClass === cls ? '#ffffff' : '#6b7280',
+                  color: ttClass === cls ? '#C9A84C' : '#6b7280',
                 }}>{cls}</Text>
               </TouchableOpacity>
             ))}
@@ -861,19 +862,19 @@ export default function TeacherScreen({navigation}: any) {
                   <TouchableOpacity key={i}
                     style={{
                       paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
-                      backgroundColor: ttDay === d ? '#1e1b4b' : '#ffffff',
-                      borderWidth: 1, borderColor: ttDay === d ? '#1e1b4b' : '#ede9fe',
+                      backgroundColor: ttDay === d ? '#0d1f3c' : '#ffffff',
+                      borderWidth: 1, borderColor: ttDay === d ? '#0d1f3c' : '#ece5d3',
                     }}
                     onPress={() => setTtDay(d)}>
                     <Text style={{
                       fontSize: 12, fontWeight: '600',
-                      color: ttDay === d ? '#ffffff' : '#6b7280',
+                      color: ttDay === d ? '#C9A84C' : '#6b7280',
                     }}>{d.slice(0, 3)}{d === 'Friday' ? ' 🕌' : ''}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
 
-              {loadingTT && <ActivityIndicator color="#059669" style={{marginVertical: 20}} />}
+              {loadingTT && <ActivityIndicator color="#B8960A" style={{marginVertical: 20}} />}
 
               {!loadingTT && ttData && ttData[ttDay] ? (
                 ttData[ttDay].map((t: any, i: number) => {
@@ -881,19 +882,19 @@ export default function TeacherScreen({navigation}: any) {
                     t.teacher.toLowerCase().includes(teacher.name.toLowerCase());
                   return (
                     <View key={i} style={{
-                      backgroundColor: t.period === 0 ? '#f0fdf4' : isMine ? '#ecfdf5' : '#ffffff',
+                      backgroundColor: t.period === 0 ? '#f0fdf4' : isMine ? '#fdf8ee' : '#ffffff',
                       borderRadius: 14, padding: 14, marginBottom: 8,
                       borderWidth: isMine ? 1.5 : 1,
-                      borderColor: t.period === 0 ? '#bbf7d0' : isMine ? '#059669' : '#ede9fe',
+                      borderColor: t.period === 0 ? '#bbf7d0' : isMine ? '#B8960A' : '#ece5d3',
                       flexDirection: 'row', alignItems: 'center', gap: 12,
                     }}>
                       <View style={{minWidth: 90}}>
-                        <Text style={{fontSize: 11, fontWeight: '700', color: '#059669'}}>{t.time}</Text>
+                        <Text style={{fontSize: 11, fontWeight: '700', color: '#B8960A'}}>{t.time}</Text>
                       </View>
                       <View style={{flex: 1}}>
                         <Text style={{
                           fontSize: 14, fontWeight: '600',
-                          color: t.period === 0 ? '#16a34a' : '#1e1b4b',
+                          color: t.period === 0 ? '#16a34a' : '#0d1f3c',
                         }}>{t.period === 0 ? '🍎 Break' : t.subject || '—'}</Text>
                         {t.teacher ? (
                           <Text style={{fontSize: 12, color: '#9ca3af', marginTop: 2}}>
@@ -925,7 +926,7 @@ export default function TeacherScreen({navigation}: any) {
           <Text style={styles.sectionTitle}>Assigned Classes</Text>
           {classes.length === 0 ? (
             <View style={styles.emptyBox}>
-              <BookOpenIcon size={40} color="#c4b5fd" />
+              <BookOpenIcon size={40} color="#b8a88a" />
               <Text style={styles.emptyTxt}>No classes assigned</Text>
             </View>
           ) : (
@@ -934,7 +935,7 @@ export default function TeacherScreen({navigation}: any) {
                 <View style={styles.myClassLeft}>
                   <View style={[styles.myClassIcon,
                     inchargeClasses.includes(cls) && {backgroundColor: '#f0fdf4'}]}>
-                    <BookOpenIcon size={20} color={inchargeClasses.includes(cls) ? '#16a34a' : '#7c3aed'} />
+                    <BookOpenIcon size={20} color={inchargeClasses.includes(cls) ? '#16a34a' : '#B8960A'} />
                   </View>
                   <View>
                     <Text style={styles.myClassName}>{cls}</Text>
@@ -946,7 +947,7 @@ export default function TeacherScreen({navigation}: any) {
                 <View style={styles.myClassActions}>
                   {inchargeClasses.includes(cls) && (
                     <TouchableOpacity
-                      style={[styles.markBtn, {backgroundColor: '#1e1b4b'}]}
+                      style={styles.markBtn}
                       onPress={() => {setTab('Attendance'); loadAttStudents(cls);}}>
                       <Text style={styles.markBtnTxt}>Attend</Text>
                     </TouchableOpacity>
@@ -972,87 +973,87 @@ export default function TeacherScreen({navigation}: any) {
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: '#faf5ff'},
+  root: {flex: 1, backgroundColor: '#faf8f2'},
   flex: {flex: 1},
   navbar: {
-    backgroundColor: '#1e1b4b', paddingTop: 50, paddingBottom: 16,
+    backgroundColor: '#0d1f3c', paddingTop: 50, paddingBottom: 16,
     paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
   },
   brand: {fontSize: 20, fontWeight: '700', color: '#ffffff', letterSpacing: 2},
-  brandAccent: {color: '#a78bfa'},
+  brandAccent: {color: '#C9A84C'},
   navSub: {fontSize: 9, letterSpacing: 3, color: 'rgba(255,255,255,0.5)'},
   teacherCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: '#ffffff', padding: 14,
-    borderBottomWidth: 1, borderBottomColor: '#ede9fe',
+    borderBottomWidth: 1, borderBottomColor: '#ece5d3',
   },
   teacherAv: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#f5f3ff', borderWidth: 2, borderColor: '#7c3aed',
+    backgroundColor: '#fdf8ee', borderWidth: 2, borderColor: '#B8960A',
     alignItems: 'center', justifyContent: 'center',
   },
-  teacherAvTxt: {fontSize: 13, fontWeight: '700', color: '#7c3aed'},
-  teacherName: {fontSize: 15, fontWeight: '700', color: '#1e1b4b'},
+  teacherAvTxt: {fontSize: 13, fontWeight: '700', color: '#B8960A'},
+  teacherName: {fontSize: 15, fontWeight: '700', color: '#0d1f3c'},
   teacherMeta: {fontSize: 12, color: '#6b7280', marginTop: 1},
   tabRow: {
     flexDirection: 'row', backgroundColor: '#ffffff',
-    borderBottomWidth: 1, borderBottomColor: '#ede9fe',
+    borderBottomWidth: 1, borderBottomColor: '#ece5d3',
   },
   tab: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 5, paddingVertical: 11, borderBottomWidth: 2, borderBottomColor: 'transparent',
   },
-  tabOn: {borderBottomColor: '#7c3aed'},
+  tabOn: {borderBottomColor: '#B8960A'},
   tabTxt: {fontSize: 12, fontWeight: '500', color: '#9ca3af'},
-  tabTxtOn: {color: '#7c3aed', fontWeight: '700'},
+  tabTxtOn: {color: '#B8960A', fontWeight: '700'},
   content: {flex: 1, paddingHorizontal: 14, paddingTop: 14},
-  sectionTitle: {fontSize: 17, fontWeight: '700', color: '#1e1b4b', marginBottom: 12},
+  sectionTitle: {fontSize: 17, fontWeight: '700', color: '#0d1f3c', marginBottom: 12},
   stepHeader: {flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12},
   emptyBox: {alignItems: 'center', paddingVertical: 40, gap: 10},
   emptyTxt: {fontSize: 15, fontWeight: '600', color: '#6b7280'},
   classBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#ffffff', borderRadius: 12, padding: 16,
-    marginBottom: 8, borderWidth: 1, borderColor: '#ede9fe',
+    marginBottom: 8, borderWidth: 1, borderColor: '#ece5d3',
   },
   classBtnLeft: {flexDirection: 'row', alignItems: 'center', gap: 10},
-  classBtnTxt: {fontSize: 15, fontWeight: '600', color: '#1e1b4b'},
+  classBtnTxt: {fontSize: 15, fontWeight: '600', color: '#0d1f3c'},
   classBtnSub: {fontSize: 11, color: '#16a34a', fontWeight: '500', marginTop: 2},
   testTypeBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#ffffff', borderRadius: 12, padding: 14,
-    marginBottom: 8, borderWidth: 1.5, borderColor: '#ede9fe',
+    marginBottom: 8, borderWidth: 1.5, borderColor: '#ece5d3',
   },
-  testTypeBtnOn: {borderColor: '#7c3aed', backgroundColor: '#f5f3ff'},
+  testTypeBtnOn: {borderColor: '#B8960A', backgroundColor: '#fdf8ee'},
   testTypeTxt: {fontSize: 14, fontWeight: '500', color: '#6b7280'},
-  testTypeTxtOn: {color: '#7c3aed', fontWeight: '700'},
+  testTypeTxtOn: {color: '#B8960A', fontWeight: '700'},
   marksInput: {
-    backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#ede9fe',
-    borderRadius: 10, padding: 13, fontSize: 16, color: '#1e1b4b',
+    backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#ece5d3',
+    borderRadius: 10, padding: 13, fontSize: 16, color: '#0d1f3c',
     fontWeight: '600', marginBottom: 16,
   },
   nextBtn: {
-    backgroundColor: '#7c3aed', borderRadius: 10,
+    backgroundColor: '#0d1f3c', borderRadius: 10,
     padding: 15, alignItems: 'center', marginTop: 8,
   },
-  nextBtnOff: {backgroundColor: '#c4b5fd'},
-  nextBtnTxt: {color: '#ffffff', fontSize: 15, fontWeight: '700'},
+  nextBtnOff: {backgroundColor: '#9ca3af'},
+  nextBtnTxt: {color: '#C9A84C', fontSize: 15, fontWeight: '700'},
   testSummary: {
-    backgroundColor: '#f5f3ff', borderRadius: 10, padding: 12,
-    marginBottom: 14, borderWidth: 1, borderColor: '#ede9fe',
+    backgroundColor: '#fdf8ee', borderRadius: 10, padding: 12,
+    marginBottom: 14, borderWidth: 1, borderColor: '#e8d5a3',
   },
-  testSummaryTxt: {fontSize: 13, color: '#7c3aed', fontWeight: '600'},
+  testSummaryTxt: {fontSize: 13, color: '#B8960A', fontWeight: '600'},
   classHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: '#ffffff', padding: 14,
-    borderBottomWidth: 1, borderBottomColor: '#ede9fe',
+    borderBottomWidth: 1, borderBottomColor: '#ece5d3',
   },
-  backLink: {fontSize: 13, color: '#7c3aed', fontWeight: '600'},
-  className: {fontSize: 16, fontWeight: '700', color: '#1e1b4b'},
+  backLink: {fontSize: 13, color: '#B8960A', fontWeight: '600'},
+  className: {fontSize: 16, fontWeight: '700', color: '#0d1f3c'},
   summaryRow: {
     flexDirection: 'row', gap: 8, padding: 12,
-    backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ede9fe',
+    backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ece5d3',
   },
   summaryCard: {flex: 1, padding: 10, alignItems: 'center', borderRadius: 10, borderWidth: 1},
   summaryVal: {fontSize: 22, fontWeight: '700'},
@@ -1067,15 +1068,15 @@ const styles = StyleSheet.create({
   },
   studentAv: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#f5f3ff', borderWidth: 1.5, borderColor: '#ede9fe',
+    backgroundColor: '#fdf8ee', borderWidth: 1.5, borderColor: '#e8d5a3',
     alignItems: 'center', justifyContent: 'center',
   },
   avP: {backgroundColor: '#f0fdf4', borderColor: '#86efac'},
   avA: {backgroundColor: '#fef2f2', borderColor: '#fca5a5'},
   avL: {backgroundColor: '#fffbeb', borderColor: '#fcd34d'},
-  studentAvTxt: {fontSize: 12, fontWeight: '700', color: '#7c3aed'},
+  studentAvTxt: {fontSize: 12, fontWeight: '700', color: '#B8960A'},
   studentInfo: {flex: 1},
-  studentName: {fontSize: 13, fontWeight: '600', color: '#1e1b4b'},
+  studentName: {fontSize: 13, fontWeight: '600', color: '#0d1f3c'},
   studentRoll: {fontSize: 11, color: '#9ca3af', marginTop: 1},
   btnGroup: {flexDirection: 'row', gap: 5},
   attBtn: {
@@ -1086,54 +1087,54 @@ const styles = StyleSheet.create({
   attBtnTxt: {fontSize: 12, fontWeight: '500', color: '#9ca3af'},
   marksInputWrap: {flexDirection: 'row', alignItems: 'center', gap: 4},
   marksInputSmall: {
-    width: 52, height: 40, borderWidth: 1.5, borderColor: '#ede9fe',
-    borderRadius: 8, backgroundColor: '#f5f3ff',
-    textAlign: 'center', fontSize: 14, fontWeight: '700', color: '#1e1b4b',
+    width: 52, height: 40, borderWidth: 1.5, borderColor: '#ece5d3',
+    borderRadius: 8, backgroundColor: '#fdf8ee',
+    textAlign: 'center', fontSize: 14, fontWeight: '700', color: '#0d1f3c',
   },
   marksTotal: {fontSize: 13, color: '#9ca3af', fontWeight: '500'},
   submitBar: {
     padding: 14, backgroundColor: '#ffffff',
-    borderTopWidth: 1, borderTopColor: '#ede9fe',
+    borderTopWidth: 1, borderTopColor: '#ece5d3',
   },
-  submitBtn: {backgroundColor: '#1e1b4b', borderRadius: 12, padding: 15, alignItems: 'center'},
-  submitBtnOff: {backgroundColor: '#c4b5fd'},
-  submitBtnTxt: {color: '#ffffff', fontSize: 15, fontWeight: '700'},
+  submitBtn: {backgroundColor: '#0d1f3c', borderRadius: 12, padding: 15, alignItems: 'center'},
+  submitBtnOff: {backgroundColor: '#9ca3af'},
+  submitBtnTxt: {color: '#C9A84C', fontSize: 15, fontWeight: '700'},
   successWrap: {flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30},
   successIcon: {
     width: 80, height: 80, borderRadius: 40,
     backgroundColor: '#f0fdf4', borderWidth: 2, borderColor: '#86efac',
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  successTitle: {fontSize: 26, fontWeight: '700', color: '#1e1b4b', marginBottom: 8},
+  successTitle: {fontSize: 26, fontWeight: '700', color: '#0d1f3c', marginBottom: 8},
   successStats: {
     flexDirection: 'row', gap: 24, backgroundColor: '#ffffff',
     borderRadius: 16, padding: 20, marginBottom: 24,
-    borderWidth: 1, borderColor: '#ede9fe',
+    borderWidth: 1, borderColor: '#ece5d3',
   },
   sstat: {alignItems: 'center'},
   sstatVal: {fontSize: 28, fontWeight: '700'},
   sstatLbl: {fontSize: 12, color: '#6b7280', fontWeight: '500', marginTop: 2},
   backBtn: {
-    backgroundColor: '#1e1b4b', borderRadius: 12,
+    backgroundColor: '#0d1f3c', borderRadius: 12,
     padding: 15, width: '100%', alignItems: 'center',
   },
-  backBtnTxt: {color: '#ffffff', fontSize: 15, fontWeight: '700'},
+  backBtnTxt: {color: '#C9A84C', fontSize: 15, fontWeight: '700'},
   myClassCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#ffffff', borderRadius: 12, padding: 14,
-    marginBottom: 8, borderWidth: 1, borderColor: '#ede9fe',
+    marginBottom: 8, borderWidth: 1, borderColor: '#ece5d3',
   },
   myClassLeft: {flexDirection: 'row', alignItems: 'center', gap: 12},
   myClassIcon: {
     width: 40, height: 40, borderRadius: 10,
-    backgroundColor: '#f5f3ff', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#fdf8ee', alignItems: 'center', justifyContent: 'center',
   },
-  myClassName: {fontSize: 15, fontWeight: '700', color: '#1e1b4b'},
+  myClassName: {fontSize: 15, fontWeight: '700', color: '#0d1f3c'},
   myClassSub: {fontSize: 12, color: '#6b7280', marginTop: 2},
   myClassActions: {flexDirection: 'row', gap: 8},
   markBtn: {
-    backgroundColor: '#7c3aed', borderRadius: 8,
+    backgroundColor: '#0d1f3c', borderRadius: 8,
     paddingHorizontal: 12, paddingVertical: 8,
   },
-  markBtnTxt: {color: '#ffffff', fontSize: 12, fontWeight: '700'},
+  markBtnTxt: {color: '#C9A84C', fontSize: 12, fontWeight: '700'},
 });
