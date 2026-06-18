@@ -28,6 +28,7 @@ import AdminScreen from './screens/AdminScreen';
 import TeacherScreen from './screens/TeacherScreen';
 import StudentScreen from './screens/StudentScreen';
 import ParentScreen from './screens/ParentScreen';
+import {theme} from './theme';
 
 const Stack = createNativeStackNavigator();
 
@@ -52,10 +53,10 @@ const formatId = (text: string): string => {
 };
 
 const ROLE_INFO: any = {
-  admin:   {label: 'Admin',   color: '#4f46e5'},
-  teacher: {label: 'Teacher', color: '#059669'},
-  student: {label: 'Student', color: '#0284c7'},
-  parent:  {label: 'Parent',  color: '#9333ea'},
+  admin:   {label: 'Admin',   color: theme.colors.roleAdmin},
+  teacher: {label: 'Teacher', color: theme.colors.roleTeacher},
+  student: {label: 'Student', color: theme.colors.roleStudent},
+  parent:  {label: 'Parent',  color: theme.colors.roleParent},
 };
 
 function RoleIcon({role, size, color}: {role: string, size: number, color: string}) {
@@ -105,7 +106,7 @@ function LoginScreen({navigation}: any) {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#1e1b4b" />
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.navy} />
 
       {/* NAVBAR */}
       <View style={styles.navbar}>
@@ -120,7 +121,7 @@ function LoginScreen({navigation}: any) {
         {/* HEADER */}
         <View style={styles.header}>
           <View style={styles.lockIcon}>
-            <LockClosedIcon size={28} color="#7c3aed" />
+            <LockClosedIcon size={28} color={theme.colors.gold} />
           </View>
           <Text style={styles.headerEye}>SECURE LOGIN</Text>
           <Text style={styles.headerTitle}>
@@ -133,7 +134,7 @@ function LoginScreen({navigation}: any) {
         {detectedRole ? (
           <View style={[styles.roleBadge, {
             borderColor: ROLE_INFO[detectedRole].color,
-            backgroundColor: ROLE_INFO[detectedRole].color + '15',
+            backgroundColor: ROLE_INFO[detectedRole].color + '18',
           }]}>
             <RoleIcon role={detectedRole} size={20} color={ROLE_INFO[detectedRole].color} />
             <Text style={[styles.roleBadgeTxt, {color: ROLE_INFO[detectedRole].color}]}>
@@ -142,7 +143,7 @@ function LoginScreen({navigation}: any) {
           </View>
         ) : id.length > 3 ? (
           <View style={styles.roleBadgeInvalid}>
-            <ExclamationCircleIcon size={16} color="#ef4444" />
+            <ExclamationCircleIcon size={16} color={theme.colors.error} />
             <Text style={styles.roleBadgeInvalidTxt}> Invalid ID format</Text>
           </View>
         ) : null}
@@ -153,11 +154,11 @@ function LoginScreen({navigation}: any) {
           {/* ID Field */}
           <Text style={styles.fieldLabel}>YOUR ID</Text>
           <View style={styles.inputWrap}>
-            <UserIcon size={18} color="#c4b5fd" />
+            <UserIcon size={18} color={theme.colors.gold} />
             <TextInput
               style={styles.input}
               placeholder="e.g. GHS-001-STU-0001"
-              placeholderTextColor="#c4b5fd"
+              placeholderTextColor={theme.colors.textPlaceholder}
               value={id}
               onChangeText={(text) => setId(formatId(text))}
               autoCapitalize="none"
@@ -171,11 +172,11 @@ function LoginScreen({navigation}: any) {
           {/* Password Field */}
           <Text style={[styles.fieldLabel, {marginTop: 14}]}>PASSWORD</Text>
           <View style={styles.inputWrap}>
-            <LockClosedIcon size={18} color="#c4b5fd" />
+            <LockClosedIcon size={18} color={theme.colors.gold} />
             <TextInput
               style={styles.input}
               placeholder="Enter your password"
-              placeholderTextColor="#c4b5fd"
+              placeholderTextColor={theme.colors.textPlaceholder}
               value={pass}
               onChangeText={setPass}
               secureTextEntry={!showPass}
@@ -186,14 +187,14 @@ function LoginScreen({navigation}: any) {
               onPress={() => setShowPass(!showPass)}
               style={styles.eyeBtn}>
               {showPass
-                ? <EyeSlashIcon size={20} color="#9ca3af" />
-                : <EyeIcon size={20} color="#9ca3af" />}
+                ? <EyeSlashIcon size={20} color={theme.colors.textMuted} />
+                : <EyeIcon size={20} color={theme.colors.textMuted} />}
             </TouchableOpacity>
           </View>
 
           {error ? (
             <View style={styles.errorWrap}>
-              <ExclamationCircleIcon size={14} color="#ef4444" />
+              <ExclamationCircleIcon size={14} color={theme.colors.error} />
               <Text style={styles.errorTxt}> {error}</Text>
             </View>
           ) : null}
@@ -202,21 +203,18 @@ function LoginScreen({navigation}: any) {
             style={[
               styles.loginBtn,
               (!detectedRole || loading) && styles.loginBtnDisabled,
-              detectedRole && {backgroundColor: ROLE_INFO[detectedRole].color},
             ]}
             onPress={handleLogin}
             disabled={!detectedRole || loading}
             activeOpacity={0.8}>
             {loading ? (
-              <ActivityIndicator color="#ffffff" />
+              <ActivityIndicator color={theme.colors.gold} />
             ) : (
               <View style={styles.loginBtnInner}>
                 <Text style={styles.loginBtnTxt}>
-                  {detectedRole
-                    ? `Login as ${ROLE_INFO[detectedRole].label}`
-                    : 'Enter your ID first'}
+                  {detectedRole ? 'Sign In' : 'Enter your ID first'}
                 </Text>
-                {detectedRole && <ArrowRightIcon size={18} color="#ffffff" />}
+                {detectedRole && <ArrowRightIcon size={18} color={theme.colors.gold} />}
               </View>
             )}
           </TouchableOpacity>
@@ -224,7 +222,7 @@ function LoginScreen({navigation}: any) {
 
         {/* FOOTER */}
         <View style={styles.footerRow}>
-          <ShieldCheckIcon size={13} color="#a78bfa" />
+          <ShieldCheckIcon size={13} color={theme.colors.textMuted} />
           <Text style={styles.footerTxt}> Secured by QUANTAIP · quantaip.org</Text>
         </View>
 
@@ -248,9 +246,9 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: '#faf5ff'},
+  root: {flex: 1, backgroundColor: theme.colors.cream},
   navbar: {
-    backgroundColor: '#1e1b4b',
+    backgroundColor: theme.colors.navy,
     paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 20,
@@ -258,20 +256,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  brand: {fontSize: 20, fontWeight: '700', color: '#ffffff', letterSpacing: 2},
-  brandAccent: {color: '#a78bfa'},
-  navSub: {fontSize: 9, letterSpacing: 3, color: 'rgba(255,255,255,0.5)'},
+  brand: {fontSize: 20, fontWeight: '700', color: theme.colors.textOnDark, letterSpacing: 2},
+  brandAccent: {color: theme.colors.gold},
+  navSub: {fontSize: 9, letterSpacing: 3, color: theme.colors.textOnDarkMuted},
   scroll: {padding: 16, paddingBottom: 40},
   header: {alignItems: 'center', marginVertical: 24},
   lockIcon: {
     width: 56, height: 56, borderRadius: 16,
-    backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ede9fe',
+    backgroundColor: theme.colors.goldLight, borderWidth: 1, borderColor: theme.colors.goldBorder,
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  headerEye: {fontSize: 10, letterSpacing: 4, color: '#7c3aed', fontWeight: '600', marginBottom: 8},
-  headerTitle: {fontSize: 32, fontWeight: '700', color: '#1e1b4b', marginBottom: 6},
-  headerAccent: {color: '#7c3aed'},
-  headerSub: {fontSize: 14, color: '#6b7280'},
+  headerEye: {fontSize: 10, letterSpacing: 4, color: theme.colors.gold, fontWeight: '600', marginBottom: 8},
+  headerTitle: {fontSize: 32, fontWeight: '700', color: theme.colors.navy, marginBottom: 6},
+  headerAccent: {color: theme.colors.gold},
+  headerSub: {fontSize: 14, color: theme.colors.textMuted},
   roleBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     padding: 12, borderRadius: 12, borderWidth: 1.5, marginBottom: 12,
@@ -279,31 +277,34 @@ const styles = StyleSheet.create({
   roleBadgeTxt: {fontSize: 14, fontWeight: '700'},
   roleBadgeInvalid: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca',
+    backgroundColor: theme.colors.errorBg, borderWidth: 1, borderColor: theme.colors.errorBorder,
     borderRadius: 12, padding: 12, marginBottom: 12,
   },
-  roleBadgeInvalidTxt: {fontSize: 13, color: '#ef4444', fontWeight: '600'},
+  roleBadgeInvalidTxt: {fontSize: 13, color: theme.colors.error, fontWeight: '600'},
   card: {
-    backgroundColor: '#ffffff', borderRadius: 16, padding: 16,
-    marginBottom: 14, borderWidth: 1, borderColor: '#ede9fe',
+    backgroundColor: theme.colors.white, borderRadius: 16, padding: 16,
+    marginBottom: 14, borderWidth: 1, borderColor: theme.colors.warmBorder,
   },
-  fieldLabel: {fontSize: 11, fontWeight: '600', color: '#7c3aed', letterSpacing: 2, marginBottom: 10},
+  fieldLabel: {fontSize: 11, fontWeight: '600', color: theme.colors.gold, letterSpacing: 2, marginBottom: 10},
   inputWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#f5f3ff', borderWidth: 1.5, borderColor: '#ede9fe',
+    backgroundColor: theme.colors.white, borderWidth: 1.5, borderColor: theme.colors.warmBorder,
     borderRadius: 10, paddingHorizontal: 12,
   },
-  input: {flex: 1, padding: 13, fontSize: 14, color: '#1e1b4b', fontWeight: '500'},
+  input: {flex: 1, padding: 13, fontSize: 14, color: theme.colors.navy, fontWeight: '500'},
   eyeBtn: {padding: 4},
   errorWrap: {flexDirection: 'row', alignItems: 'center', marginTop: 10, marginBottom: 4},
-  errorTxt: {fontSize: 13, color: '#ef4444', fontWeight: '500'},
-  loginBtn: {borderRadius: 10, padding: 15, alignItems: 'center', marginTop: 16},
-  loginBtnDisabled: {backgroundColor: '#c4b5fd'},
+  errorTxt: {fontSize: 13, color: theme.colors.error, fontWeight: '500'},
+  loginBtn: {
+    borderRadius: 10, padding: 15, alignItems: 'center', marginTop: 16,
+    backgroundColor: theme.colors.navy,
+  },
+  loginBtnDisabled: {backgroundColor: '#9ca3af'},
   loginBtnInner: {flexDirection: 'row', alignItems: 'center', gap: 8},
-  loginBtnTxt: {color: '#ffffff', fontSize: 15, fontWeight: '700'},
+  loginBtnTxt: {color: theme.colors.gold, fontSize: 15, fontWeight: '700'},
   footerRow: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'center', gap: 4, marginBottom: 10,
   },
-  footerTxt: {fontSize: 11, color: '#a78bfa', fontWeight: '500'},
+  footerTxt: {fontSize: 11, color: theme.colors.textMuted, fontWeight: '500'},
 });
