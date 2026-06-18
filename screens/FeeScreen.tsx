@@ -22,6 +22,7 @@ import {
 } from 'react-native-heroicons/outline';
 
 import {SCHOOL_CODE} from '../config';
+import {theme} from '../theme';
 
 const CLASS_HIERARCHY = [
   {category: 'Early Education', classes: ['Nursery', 'Prep', 'KG']},
@@ -293,7 +294,7 @@ export default function FeeScreen() {
                 <TextInput
                   style={styles.discountInput}
                   placeholder="e.g. 50"
-                  placeholderTextColor="#c4b5fd"
+                  placeholderTextColor="#b8a88a"
                   keyboardType="number-pad"
                   value={feeDiscount}
                   onChangeText={setFeeDiscount}
@@ -313,7 +314,7 @@ export default function FeeScreen() {
                 <TextInput
                   style={styles.discountInput}
                   placeholder="e.g. 1000"
-                  placeholderTextColor="#c4b5fd"
+                  placeholderTextColor="#b8a88a"
                   keyboardType="number-pad"
                   value={feeDiscount}
                   onChangeText={setFeeDiscount}
@@ -370,9 +371,9 @@ export default function FeeScreen() {
                 <Text style={[styles.summaryVal, {color: '#ef4444'}]}>{pendingCount}</Text>
                 <Text style={styles.summaryLbl}>Pending</Text>
               </View>
-              <View style={[styles.summaryCard, {backgroundColor: '#f5f3ff', borderColor: '#ddd6fe'}]}>
-                <ChartBarIcon size={20} color="#7c3aed" />
-                <Text style={[styles.summaryVal, {color: '#7c3aed'}]}>{collectionRate}%</Text>
+              <View style={[styles.summaryCard, {backgroundColor: '#fdf8ee', borderColor: '#e8d5a3'}]}>
+                <ChartBarIcon size={20} color="#B8960A" />
+                <Text style={[styles.summaryVal, {color: '#B8960A'}]}>{collectionRate}%</Text>
                 <Text style={styles.summaryLbl}>Collected</Text>
               </View>
             </View>
@@ -401,10 +402,10 @@ export default function FeeScreen() {
 
             {/* Student List */}
             {loading ? (
-              <ActivityIndicator color="#7c3aed" size="large" style={{marginTop: 30}} />
+              <ActivityIndicator color="#B8960A" size="large" style={{marginTop: 30}} />
             ) : filteredStudents.length === 0 ? (
               <View style={styles.emptyBox}>
-                <BanknotesIcon size={40} color="#c4b5fd" />
+                <BanknotesIcon size={40} color="#b8a88a" />
                 <Text style={styles.emptyTxt}>
                   {students.length === 0 ? 'No students added yet' : 'No students match filter'}
                 </Text>
@@ -428,7 +429,7 @@ export default function FeeScreen() {
                       <Text style={styles.studentMeta}>{s.class} — {s.section}</Text>
                       <Text style={[styles.feeLbl, {
                         color: s.feeType === 'full_scholarship' ? '#16a34a' :
-                               s.feeType && s.feeType !== 'standard' ? '#7c3aed' : '#6b7280'
+                               s.feeType && s.feeType !== 'standard' ? '#B8960A' : '#6b7280'
                       }]}>
                         {getFeeLabel(s)}
                       </Text>
@@ -443,7 +444,7 @@ export default function FeeScreen() {
                         setFeeType(s.feeType || 'standard');
                         setFeeDiscount(s.feeDiscount ? String(s.feeDiscount) : '');
                       }}>
-                      <UserIcon size={14} color="#7c3aed" />
+                      <UserIcon size={14} color="#B8960A" />
                     </TouchableOpacity>
 
                     {/* Paid/Pending button */}
@@ -490,7 +491,7 @@ export default function FeeScreen() {
                       <TextInput
                         style={styles.feeInput}
                         placeholder="0"
-                        placeholderTextColor="#c4b5fd"
+                        placeholderTextColor="#b8a88a"
                         keyboardType="number-pad"
                         value={feeInputs[cls] || ''}
                         onChangeText={val => setFeeInputs(prev => ({...prev, [cls]: val}))}
@@ -530,12 +531,12 @@ export default function FeeScreen() {
               <View style={styles.divider} />
               <View style={styles.reportRow}>
                 <Text style={styles.reportLbl}>Collection Rate</Text>
-                <Text style={[styles.reportVal, {color: '#7c3aed'}]}>{collectionRate}%</Text>
+                <Text style={[styles.reportVal, {color: '#B8960A'}]}>{collectionRate}%</Text>
               </View>
               <View style={styles.divider} />
               <View style={styles.reportRow}>
                 <Text style={styles.reportLbl}>Scholarships</Text>
-                <Text style={[styles.reportVal, {color: '#0891b2'}]}>
+                <Text style={[styles.reportVal, {color: '#0284c7'}]}>
                   {students.filter(s => s.feeType && s.feeType !== 'standard').length}
                 </Text>
               </View>
@@ -567,41 +568,41 @@ export default function FeeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: '#faf5ff'},
-  subTabRow: {flexDirection: 'row', backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ede9fe'},
+  root: {flex: 1, backgroundColor: '#faf8f2'},
+  subTabRow: {flexDirection: 'row', backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ece5d3'},
   subTab: {flex: 1, paddingVertical: 11, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent'},
-  subTabOn: {borderBottomColor: '#7c3aed'},
+  subTabOn: {borderBottomColor: '#B8960A'},
   subTabTxt: {fontSize: 13, fontWeight: '500', color: '#9ca3af'},
-  subTabTxtOn: {color: '#7c3aed', fontWeight: '700'},
+  subTabTxtOn: {color: '#B8960A', fontWeight: '700'},
   content: {paddingHorizontal: 14, paddingTop: 14},
   summaryRow: {flexDirection: 'row', gap: 8, marginBottom: 14},
   summaryCard: {flex: 1, borderRadius: 12, padding: 12, alignItems: 'center', gap: 4, borderWidth: 1},
   summaryVal: {fontSize: 22, fontWeight: '700'},
   summaryLbl: {fontSize: 11, color: '#6b7280', fontWeight: '500'},
   filtersRow: {flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12},
-  filterChip: {borderWidth: 1, borderColor: '#ede9fe', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#ffffff', marginRight: 6},
-  filterChipOn: {borderColor: '#7c3aed', backgroundColor: '#f5f3ff'},
+  filterChip: {borderWidth: 1, borderColor: '#ece5d3', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#ffffff', marginRight: 6},
+  filterChipOn: {borderColor: '#B8960A', backgroundColor: '#fdf8ee'},
   filterChipTxt: {fontSize: 12, fontWeight: '500', color: '#6b7280'},
-  filterChipTxtOn: {color: '#7c3aed', fontWeight: '700'},
+  filterChipTxtOn: {color: '#B8960A', fontWeight: '700'},
   filterDivider: {width: 1, height: 20, backgroundColor: '#e5e7eb', marginHorizontal: 6},
   emptyBox: {alignItems: 'center', paddingVertical: 40, gap: 10},
   emptyTxt: {fontSize: 14, color: '#9ca3af', fontWeight: '500'},
   studentCard: {
     backgroundColor: '#ffffff', borderRadius: 12, padding: 12,
-    marginBottom: 8, borderWidth: 1, borderColor: '#ede9fe',
+    marginBottom: 8, borderWidth: 1, borderColor: '#ece5d3',
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
   studentLeft: {flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1},
   studentAv: {width: 38, height: 38, borderRadius: 19, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center'},
   studentAvTxt: {fontSize: 12, fontWeight: '700'},
   studentInfo: {flex: 1},
-  studentName: {fontSize: 13, fontWeight: '600', color: '#1e1b4b'},
+  studentName: {fontSize: 13, fontWeight: '600', color: '#0d1f3c'},
   studentMeta: {fontSize: 11, color: '#9ca3af', marginTop: 1},
   feeLbl: {fontSize: 11, marginTop: 2, fontWeight: '500'},
   studentActions: {flexDirection: 'column', alignItems: 'flex-end', gap: 6},
   feeTypeIcon: {
     width: 28, height: 28, borderRadius: 8,
-    backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ede9fe',
+    backgroundColor: '#fdf8ee', borderWidth: 1, borderColor: '#ece5d3',
     alignItems: 'center', justifyContent: 'center',
   },
   statusBtn: {
@@ -611,47 +612,47 @@ const styles = StyleSheet.create({
   statusBtnPaid: {backgroundColor: '#f0fdf4', borderColor: '#86efac'},
   statusBtnPending: {backgroundColor: '#fef2f2', borderColor: '#fca5a5'},
   statusBtnTxt: {fontSize: 11, fontWeight: '700'},
-  refreshBtn: {backgroundColor: '#ffffff', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#ede9fe', marginTop: 8},
-  refreshTxt: {fontSize: 13, fontWeight: '600', color: '#7c3aed'},
-  sectionTitle: {fontSize: 17, fontWeight: '700', color: '#1e1b4b', marginBottom: 4},
+  refreshBtn: {backgroundColor: '#ffffff', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#ece5d3', marginTop: 8},
+  refreshTxt: {fontSize: 13, fontWeight: '600', color: '#B8960A'},
+  sectionTitle: {fontSize: 17, fontWeight: '700', color: '#0d1f3c', marginBottom: 4},
   sectionSub: {fontSize: 12, color: '#9ca3af', marginBottom: 14},
-  card: {backgroundColor: '#ffffff', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#ede9fe'},
-  catTitle: {fontSize: 14, fontWeight: '700', color: '#1e1b4b', marginBottom: 10},
+  card: {backgroundColor: '#ffffff', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#ece5d3'},
+  catTitle: {fontSize: 14, fontWeight: '700', color: '#0d1f3c', marginBottom: 10},
   feeRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6'},
   className: {fontSize: 13, fontWeight: '500', color: '#374151', flex: 1},
-  currentFee: {fontSize: 11, color: '#7c3aed', fontWeight: '600', marginRight: 8},
+  currentFee: {fontSize: 11, color: '#B8960A', fontWeight: '600', marginRight: 8},
   feeInputRow: {flexDirection: 'row', alignItems: 'center', gap: 6},
-  pkrLabel: {fontSize: 12, color: '#7c3aed', fontWeight: '600'},
-  feeInput: {backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ede9fe', borderRadius: 8, padding: 7, fontSize: 13, color: '#1e1b4b', width: 70, textAlign: 'center'},
-  saveBtn: {backgroundColor: '#7c3aed', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7},
-  saveBtnTxt: {color: '#ffffff', fontSize: 11, fontWeight: '700'},
-  reportCard: {backgroundColor: '#ffffff', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#ede9fe', marginBottom: 8},
+  pkrLabel: {fontSize: 12, color: '#B8960A', fontWeight: '600'},
+  feeInput: {backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#ece5d3', borderRadius: 8, padding: 7, fontSize: 13, color: '#0d1f3c', width: 70, textAlign: 'center'},
+  saveBtn: {backgroundColor: '#0d1f3c', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7},
+  saveBtnTxt: {color: '#C9A84C', fontSize: 11, fontWeight: '700'},
+  reportCard: {backgroundColor: '#ffffff', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#ece5d3', marginBottom: 8},
   reportRow: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14},
   reportLbl: {fontSize: 13, color: '#6b7280', fontWeight: '500'},
-  reportVal: {fontSize: 14, fontWeight: '700', color: '#1e1b4b'},
+  reportVal: {fontSize: 14, fontWeight: '700', color: '#0d1f3c'},
   divider: {height: 1, backgroundColor: '#f3f4f6'},
   progressRow: {flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10},
   progressCls: {fontSize: 12, fontWeight: '500', color: '#374151', width: 70},
   progressBar: {flex: 1, height: 6, backgroundColor: '#f3f4f6', borderRadius: 3, overflow: 'hidden'},
-  progressFill: {height: '100%', backgroundColor: '#7c3aed', borderRadius: 3},
-  progressPct: {fontSize: 12, fontWeight: '700', color: '#7c3aed', width: 35, textAlign: 'right'},
+  progressFill: {height: '100%', backgroundColor: '#B8960A', borderRadius: 3},
+  progressPct: {fontSize: 12, fontWeight: '700', color: '#B8960A', width: 35, textAlign: 'right'},
   // MODAL
   modalOverlay: {flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20},
   modalBox: {backgroundColor: '#ffffff', borderRadius: 16, padding: 20, width: '100%', maxWidth: 360},
   modalHeader: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8},
-  modalTitle: {fontSize: 16, fontWeight: '700', color: '#1e1b4b'},
-  modalStudent: {fontSize: 14, fontWeight: '600', color: '#1e1b4b', marginBottom: 2},
+  modalTitle: {fontSize: 16, fontWeight: '700', color: '#0d1f3c'},
+  modalStudent: {fontSize: 14, fontWeight: '600', color: '#0d1f3c', marginBottom: 2},
   modalClass: {fontSize: 12, color: '#6b7280', marginBottom: 14},
-  modalLabel: {fontSize: 11, fontWeight: '600', color: '#7c3aed', letterSpacing: 1, marginBottom: 8},
-  modalValue: {fontSize: 12, color: '#1e1b4b', fontWeight: '600'},
+  modalLabel: {fontSize: 11, fontWeight: '600', color: '#B8960A', letterSpacing: 1, marginBottom: 8},
+  modalValue: {fontSize: 12, color: '#0d1f3c', fontWeight: '600'},
   feeTypeGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14},
-  feeTypeBtn: {borderWidth: 1, borderColor: '#ede9fe', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#ffffff'},
-  feeTypeBtnOn: {borderColor: '#7c3aed', backgroundColor: '#f5f3ff'},
+  feeTypeBtn: {borderWidth: 1, borderColor: '#ece5d3', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#ffffff'},
+  feeTypeBtnOn: {borderColor: '#B8960A', backgroundColor: '#fdf8ee'},
   feeTypeTxt: {fontSize: 12, fontWeight: '500', color: '#6b7280'},
-  feeTypeTxtOn: {color: '#7c3aed', fontWeight: '700'},
-  discountBox: {backgroundColor: '#f5f3ff', borderRadius: 10, padding: 12, marginBottom: 14},
-  discountInput: {backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#ede9fe', borderRadius: 8, padding: 10, fontSize: 14, color: '#1e1b4b', marginTop: 4},
-  discountHint: {fontSize: 12, color: '#7c3aed', fontWeight: '600', marginTop: 6},
-  modalSaveBtn: {backgroundColor: '#1e1b4b', borderRadius: 10, padding: 14, alignItems: 'center'},
-  modalSaveTxt: {color: '#ffffff', fontSize: 14, fontWeight: '700'},
+  feeTypeTxtOn: {color: '#B8960A', fontWeight: '700'},
+  discountBox: {backgroundColor: '#fdf8ee', borderRadius: 10, padding: 12, marginBottom: 14},
+  discountInput: {backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#ece5d3', borderRadius: 8, padding: 10, fontSize: 14, color: '#0d1f3c', marginTop: 4},
+  discountHint: {fontSize: 12, color: '#B8960A', fontWeight: '600', marginTop: 6},
+  modalSaveBtn: {backgroundColor: '#0d1f3c', borderRadius: 10, padding: 14, alignItems: 'center'},
+  modalSaveTxt: {color: '#C9A84C', fontSize: 14, fontWeight: '700'},
 });
