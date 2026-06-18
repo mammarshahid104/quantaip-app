@@ -567,7 +567,7 @@ export default function StudentScreen({navigation}: any) {
               ))
             ) : (
               <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
-                Timetable abhi set nahi hua. Admin se rabta karein.
+                No timetable set yet. Please contact your school admin.
               </Text>
             )}
           </View>

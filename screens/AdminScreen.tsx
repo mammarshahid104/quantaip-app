@@ -240,7 +240,7 @@ export default function AdminScreen({navigation}: any) {
   const copyTTDayToOthers = () => {
     Alert.alert(
       'Copy Day',
-      `${ttDay} ka timetable baqi sab dinon par copy karein? (Friday ke times chhote rahenge)`,
+      `Copy ${ttDay}'s timetable to all other days? (Friday keeps its shorter timings.)`,
       [
         {text: 'Cancel', style: 'cancel'},
         {text: 'Copy', onPress: () => {
@@ -262,7 +262,7 @@ export default function AdminScreen({navigation}: any) {
             });
             return copy;
           });
-          Alert.alert('Done ✅', `${ttDay} sab dinon par copy ho gaya!`);
+          Alert.alert('Done ✅', `${ttDay} copied to all days!`);
         }},
       ],
     );
@@ -276,10 +276,10 @@ export default function AdminScreen({navigation}: any) {
         .collection('schools').doc(SCHOOL_CODE)
         .collection('timetable').doc(ttClass)
         .set(ttData);
-      Alert.alert('Saved ✅', `${ttClass} ka timetable save ho gaya!`);
+      Alert.alert('Saved ✅', `${ttClass} timetable saved!`);
     } catch (e) {
       console.log('❌ QUANTAIP Error:', e);
-      Alert.alert('Error', 'Timetable save nahi hua. Dobara try karein.');
+      Alert.alert('Error', 'Could not save timetable. Please try again.');
     } finally {
       setSavingTT(false);
     }
@@ -1476,7 +1476,7 @@ export default function AdminScreen({navigation}: any) {
 
             {!ttClass && !loadingTT && (
               <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
-                Upar se class select karein
+                Select a class above
               </Text>
             )}
           </View>

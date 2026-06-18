@@ -396,7 +396,7 @@ export default function ParentScreen({navigation}: any) {
               ))
             ) : (
               <Text style={{fontSize: 13, color: '#9ca3af', textAlign: 'center', marginTop: 20}}>
-                Timetable abhi set nahi hua.
+                No timetable set yet.
               </Text>
             )}
           </View>
