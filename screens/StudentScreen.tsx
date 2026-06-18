@@ -170,7 +170,7 @@ export default function StudentScreen({navigation}: any) {
     overallAvg >= 50 ? 'C' : overallAvg > 0 ? 'F' : '-';
 
   const gradeColor = (pct: number) =>
-    pct >= 80 ? '#16a34a' : pct >= 60 ? '#7c3aed' : pct >= 40 ? '#f59e0b' : '#ef4444';
+    pct >= 80 ? '#16a34a' : pct >= 60 ? '#C9A84C' : pct >= 40 ? '#f59e0b' : '#ef4444';
 
   const present = attendance.filter(a => a.status === 'P').length;
   const absent = attendance.filter(a => a.status === 'A').length;
@@ -181,7 +181,7 @@ export default function StudentScreen({navigation}: any) {
   if (loading) {
     return (
       <View style={styles.loadingWrap}>
-        <ActivityIndicator size="large" color="#7c3aed" />
+        <ActivityIndicator size="large" color="#C9A84C" />
         <Text style={styles.loadingTxt}>Loading your profile...</Text>
       </View>
     );
@@ -228,7 +228,7 @@ export default function StudentScreen({navigation}: any) {
 
       {/* TABS */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        style={{backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ede9fe', maxHeight: 44}}>
+        style={{backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ece5d3', maxHeight: 44}}>
         <View style={{flexDirection: 'row'}}>
           {TABS.map(t => (
             <TouchableOpacity key={t}
@@ -256,9 +256,9 @@ export default function StudentScreen({navigation}: any) {
                 <Text style={[styles.statVal, {color: '#ef4444'}]}>{absent}</Text>
                 <Text style={styles.statLbl}>Absent</Text>
               </View>
-              <View style={[styles.statCard, {backgroundColor: '#f5f3ff', borderColor: '#ddd6fe'}]}>
-                <TrophyIcon size={18} color="#7c3aed" />
-                <Text style={[styles.statVal, {color: '#7c3aed'}]}>{overallGrade}</Text>
+              <View style={[styles.statCard, {backgroundColor: '#fdf8ee', borderColor: '#e8d5a3'}]}>
+                <TrophyIcon size={18} color="#C9A84C" />
+                <Text style={[styles.statVal, {color: '#C9A84C'}]}>{overallGrade}</Text>
                 <Text style={styles.statLbl}>Grade</Text>
               </View>
             </View>
@@ -273,7 +273,7 @@ export default function StudentScreen({navigation}: any) {
                 {label: 'School', value: student?.school, icon: BookOpenIcon},
               ].map((item, i) => (
                 <View key={i} style={styles.profileRow}>
-                  <item.icon size={14} color="#7c3aed" />
+                  <item.icon size={14} color="#C9A84C" />
                   <Text style={styles.profileLabel}>{item.label}</Text>
                   <Text style={styles.profileValue}>{item.value}</Text>
                 </View>
@@ -302,7 +302,7 @@ export default function StudentScreen({navigation}: any) {
             </View>
             {attendance.length === 0 ? (
               <View style={styles.emptyBox}>
-                <CalendarDaysIcon size={40} color="#c4b5fd" />
+                <CalendarDaysIcon size={40} color="#b8a88a" />
                 <Text style={styles.emptyTxt}>No attendance records yet</Text>
               </View>
             ) : (
@@ -335,16 +335,16 @@ export default function StudentScreen({navigation}: any) {
                 <Text style={styles.gpaGrade}>Grade {overallGrade}</Text>
               </View>
               <View style={styles.rankBox}>
-                <TrophyIcon size={24} color="#a78bfa" />
+                <TrophyIcon size={24} color="#C9A84C" />
                 <Text style={styles.rankVal}>{marks.length}</Text>
                 <Text style={styles.rankLbl}>Tests</Text>
               </View>
             </View>
             {loadingMarks ? (
-              <ActivityIndicator color="#7c3aed" size="large" style={{marginTop: 20}} />
+              <ActivityIndicator color="#C9A84C" size="large" style={{marginTop: 20}} />
             ) : marks.length === 0 ? (
               <View style={styles.emptyBox}>
-                <ChartBarIcon size={40} color="#c4b5fd" />
+                <ChartBarIcon size={40} color="#b8a88a" />
                 <Text style={styles.emptyTxt}>No marks yet</Text>
                 <Text style={styles.emptySubTxt}>Marks will appear after tests</Text>
               </View>
@@ -404,16 +404,16 @@ export default function StudentScreen({navigation}: any) {
                 <Text style={styles.gpaGrade}>{student?.class} — {student?.section}</Text>
               </View>
               <View style={styles.rankBox}>
-                <TrophyIcon size={24} color="#a78bfa" />
+                <TrophyIcon size={24} color="#C9A84C" />
                 <Text style={styles.rankVal}>{results.length}</Text>
                 <Text style={styles.rankLbl}>Results</Text>
               </View>
             </View>
             {loadingResults ? (
-              <ActivityIndicator color="#7c3aed" size="large" style={{marginTop: 20}} />
+              <ActivityIndicator color="#C9A84C" size="large" style={{marginTop: 20}} />
             ) : results.length === 0 ? (
               <View style={styles.emptyBox}>
-                <TrophyIcon size={40} color="#c4b5fd" />
+                <TrophyIcon size={40} color="#b8a88a" />
                 <Text style={styles.emptyTxt}>No results yet</Text>
                 <Text style={styles.emptySubTxt}>Results will appear after admin generates them</Text>
               </View>
@@ -422,7 +422,7 @@ export default function StudentScreen({navigation}: any) {
                 <View key={i} style={styles.card}>
                   <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
                     <View>
-                      <Text style={{fontSize: 15, fontWeight: '700', color: '#1e1b4b'}}>
+                      <Text style={{fontSize: 15, fontWeight: '700', color: '#0d1f3c'}}>
                         {r.testType?.charAt(0).toUpperCase() + r.testType?.slice(1)} Result
                       </Text>
                       <Text style={{fontSize: 11, color: '#9ca3af', marginTop: 2}}>
@@ -430,12 +430,12 @@ export default function StudentScreen({navigation}: any) {
                       </Text>
                     </View>
                     <View style={{
-                      backgroundColor: r.position <= 3 ? '#fffbeb' : '#f5f3ff',
+                      backgroundColor: r.position <= 3 ? '#fffbeb' : '#fdf8ee',
                       borderRadius: 10, padding: 10, alignItems: 'center',
                       borderWidth: 1,
-                      borderColor: r.position <= 3 ? '#fcd34d' : '#c4b5fd',
+                      borderColor: r.position <= 3 ? '#fcd34d' : '#b8a88a',
                     }}>
-                      <Text style={{fontSize: 18, fontWeight: '700', color: r.position <= 3 ? '#f59e0b' : '#7c3aed'}}>
+                      <Text style={{fontSize: 18, fontWeight: '700', color: r.position <= 3 ? '#f59e0b' : '#C9A84C'}}>
                         #{r.position}
                       </Text>
                       <Text style={{fontSize: 10, color: '#9ca3af'}}>Position</Text>
@@ -449,18 +449,18 @@ export default function StudentScreen({navigation}: any) {
                     }}>
                       <Text style={{fontSize: 13, color: '#374151', fontWeight: '500'}}>{subj}</Text>
                       <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                        <Text style={{fontSize: 13, fontWeight: '600', color: '#1e1b4b'}}>
+                        <Text style={{fontSize: 13, fontWeight: '600', color: '#0d1f3c'}}>
                           {r.subjects[subj].obtained}/{r.subjects[subj].total}
                         </Text>
                         <View style={{
                           backgroundColor: r.subjects[subj].grade === 'A+' ? '#f0fdf4' :
-                            r.subjects[subj].grade === 'F' ? '#fef2f2' : '#f5f3ff',
+                            r.subjects[subj].grade === 'F' ? '#fef2f2' : '#fdf8ee',
                           borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
                         }}>
                           <Text style={{
                             fontSize: 11, fontWeight: '700',
                             color: r.subjects[subj].grade === 'A+' ? '#16a34a' :
-                              r.subjects[subj].grade === 'F' ? '#ef4444' : '#7c3aed',
+                              r.subjects[subj].grade === 'F' ? '#ef4444' : '#C9A84C',
                           }}>{r.subjects[subj].grade}</Text>
                         </View>
                       </View>
@@ -469,11 +469,11 @@ export default function StudentScreen({navigation}: any) {
                   <View style={{
                     flexDirection: 'row', justifyContent: 'space-between',
                     alignItems: 'center', marginTop: 10, paddingTop: 10,
-                    borderTopWidth: 2, borderTopColor: '#ede9fe',
+                    borderTopWidth: 2, borderTopColor: '#ece5d3',
                   }}>
-                    <Text style={{fontSize: 14, fontWeight: '700', color: '#1e1b4b'}}>Total</Text>
+                    <Text style={{fontSize: 14, fontWeight: '700', color: '#0d1f3c'}}>Total</Text>
                     <View style={{alignItems: 'flex-end'}}>
-                      <Text style={{fontSize: 16, fontWeight: '700', color: '#7c3aed'}}>
+                      <Text style={{fontSize: 16, fontWeight: '700', color: '#C9A84C'}}>
                         {r.totalObtained}/{r.totalMarks}
                       </Text>
                       <Text style={{fontSize: 12, color: '#6b7280'}}>{r.percentage}% · Grade {r.grade}</Text>
@@ -501,7 +501,7 @@ export default function StudentScreen({navigation}: any) {
                   <View key={i} style={{
                     backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
                     borderWidth: 1, marginBottom: 8,
-                    borderColor: isDueToday ? '#f59e0b' : isOverdue ? '#fecaca' : '#ede9fe',
+                    borderColor: isDueToday ? '#f59e0b' : isOverdue ? '#fecaca' : '#ece5d3',
                   }}>
                     <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
                       <Text style={{fontSize: 11, fontWeight: '700', color: '#d97706'}}>{hw.subject}</Text>
@@ -512,7 +512,7 @@ export default function StudentScreen({navigation}: any) {
                         {isDueToday ? '⏰ Due Today' : isOverdue ? 'Past due: ' + hw.dueDate : 'Due: ' + hw.dueDate}
                       </Text>
                     </View>
-                    <Text style={{fontSize: 14, fontWeight: '600', color: '#1e1b4b', marginTop: 4}}>{hw.title}</Text>
+                    <Text style={{fontSize: 14, fontWeight: '600', color: '#0d1f3c', marginTop: 4}}>{hw.title}</Text>
                     {hw.description ? (
                       <Text style={{fontSize: 12, color: '#6b7280', marginTop: 2}}>{hw.description}</Text>
                     ) : null}
@@ -534,8 +534,8 @@ export default function StudentScreen({navigation}: any) {
                 <TouchableOpacity key={i}
                   style={{
                     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
-                    backgroundColor: ttDay === d ? '#7c3aed' : '#ffffff',
-                    borderWidth: 1, borderColor: ttDay === d ? '#7c3aed' : '#ede9fe',
+                    backgroundColor: ttDay === d ? '#C9A84C' : '#ffffff',
+                    borderWidth: 1, borderColor: ttDay === d ? '#C9A84C' : '#ece5d3',
                   }}
                   onPress={() => setTtDay(d)}>
                   <Text style={{
@@ -580,87 +580,87 @@ export default function StudentScreen({navigation}: any) {
 }
 
 const styles = StyleSheet.create({
-  root: {flex: 1, backgroundColor: '#faf5ff'},
+  root: {flex: 1, backgroundColor: '#faf8f2'},
   loadingWrap: {flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12},
-  loadingTxt: {fontSize: 14, color: '#7c3aed', fontWeight: '500'},
+  loadingTxt: {fontSize: 14, color: '#C9A84C', fontWeight: '500'},
   navbar: {
-    backgroundColor: '#1e1b4b', paddingTop: 50, paddingBottom: 16,
+    backgroundColor: '#0d1f3c', paddingTop: 50, paddingBottom: 16,
     paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
   },
   brand: {fontSize: 20, fontWeight: '700', color: '#ffffff', letterSpacing: 2},
-  brandAccent: {color: '#a78bfa'},
+  brandAccent: {color: '#C9A84C'},
   navSub: {fontSize: 9, letterSpacing: 3, color: 'rgba(255,255,255,0.5)'},
   hero: {
     backgroundColor: '#ffffff', flexDirection: 'row', alignItems: 'center',
-    padding: 16, gap: 12, borderBottomWidth: 1, borderBottomColor: '#ede9fe',
+    padding: 16, gap: 12, borderBottomWidth: 1, borderBottomColor: '#ece5d3',
   },
   heroAv: {
     width: 46, height: 46, borderRadius: 23,
-    backgroundColor: '#f5f3ff', borderWidth: 2, borderColor: '#7c3aed',
+    backgroundColor: '#fdf8ee', borderWidth: 2, borderColor: '#C9A84C',
     alignItems: 'center', justifyContent: 'center',
   },
-  heroAvTxt: {fontSize: 14, fontWeight: '700', color: '#7c3aed'},
+  heroAvTxt: {fontSize: 14, fontWeight: '700', color: '#C9A84C'},
   heroInfo: {flex: 1},
-  heroName: {fontSize: 15, fontWeight: '700', color: '#1e1b4b'},
+  heroName: {fontSize: 15, fontWeight: '700', color: '#0d1f3c'},
   heroMeta: {fontSize: 11, color: '#6b7280', marginTop: 2},
-  heroId: {fontSize: 10, color: '#c4b5fd', marginTop: 1},
+  heroId: {fontSize: 10, color: '#b8a88a', marginTop: 1},
   heroBadge: {borderWidth: 1, borderRadius: 10, padding: 8, alignItems: 'center'},
   heroBadgeVal: {fontSize: 16, fontWeight: '700'},
   heroBadgeLbl: {fontSize: 9, color: '#6b7280', fontWeight: '500', marginTop: 1},
   tab: {paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 2, borderBottomColor: 'transparent'},
-  tabOn: {borderBottomColor: '#7c3aed'},
+  tabOn: {borderBottomColor: '#C9A84C'},
   tabTxt: {fontSize: 12, fontWeight: '500', color: '#9ca3af'},
-  tabTxtOn: {color: '#7c3aed', fontWeight: '700'},
+  tabTxtOn: {color: '#C9A84C', fontWeight: '700'},
   content: {flex: 1, paddingHorizontal: 14, paddingTop: 14},
   statsRow: {flexDirection: 'row', gap: 8, marginBottom: 14},
   statCard: {flex: 1, borderRadius: 12, padding: 12, alignItems: 'center', gap: 4, borderWidth: 1},
   statVal: {fontSize: 20, fontWeight: '700'},
   statLbl: {fontSize: 11, color: '#6b7280', fontWeight: '500'},
-  card: {backgroundColor: '#ffffff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#ede9fe', marginBottom: 14},
-  cardTitle: {fontSize: 15, fontWeight: '700', color: '#1e1b4b', marginBottom: 12},
+  card: {backgroundColor: '#ffffff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#ece5d3', marginBottom: 14},
+  cardTitle: {fontSize: 15, fontWeight: '700', color: '#0d1f3c', marginBottom: 12},
   profileRow: {flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#f3f4f6'},
   profileLabel: {fontSize: 12, color: '#6b7280', fontWeight: '500', width: 80},
-  profileValue: {fontSize: 13, color: '#1e1b4b', fontWeight: '600', flex: 1},
-  attSummary: {backgroundColor: '#1e1b4b', borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 14},
+  profileValue: {fontSize: 13, color: '#0d1f3c', fontWeight: '600', flex: 1},
+  attSummary: {backgroundColor: '#0d1f3c', borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 14},
   attPct: {fontSize: 40, fontWeight: '700', color: '#ffffff'},
-  attLabel: {fontSize: 13, color: '#a78bfa', marginTop: 4, marginBottom: 12},
+  attLabel: {fontSize: 13, color: '#C9A84C', marginTop: 4, marginBottom: 12},
   attBar: {width: '100%', height: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, overflow: 'hidden'},
   attBarFill: {height: '100%', borderRadius: 3},
   attStats: {flexDirection: 'row', gap: 16, marginTop: 12},
   attStat: {fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '500'},
   emptyBox: {alignItems: 'center', paddingVertical: 40, gap: 8},
   emptyTxt: {fontSize: 14, color: '#9ca3af', fontWeight: '500'},
-  emptySubTxt: {fontSize: 12, color: '#c4b5fd'},
+  emptySubTxt: {fontSize: 12, color: '#b8a88a'},
   attRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#ffffff', borderRadius: 10, padding: 12,
-    marginBottom: 6, borderWidth: 1, borderColor: '#ede9fe',
+    marginBottom: 6, borderWidth: 1, borderColor: '#ece5d3',
   },
-  attDateBox: {backgroundColor: '#f5f3ff', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4},
-  attDate: {fontSize: 11, fontWeight: '600', color: '#7c3aed'},
+  attDateBox: {backgroundColor: '#fdf8ee', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4},
+  attDate: {fontSize: 11, fontWeight: '600', color: '#C9A84C'},
   attClass: {flex: 1, fontSize: 12, color: '#6b7280', fontWeight: '500', marginLeft: 8},
   attStatusTxt: {fontSize: 12, fontWeight: '600'},
   gpaBanner: {
-    backgroundColor: '#1e1b4b', borderRadius: 16, padding: 20,
+    backgroundColor: '#0d1f3c', borderRadius: 16, padding: 20,
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 16,
   },
-  gpaEye: {fontSize: 10, letterSpacing: 2, color: '#a78bfa', fontWeight: '600', marginBottom: 4},
+  gpaEye: {fontSize: 10, letterSpacing: 2, color: '#C9A84C', fontWeight: '600', marginBottom: 4},
   gpaVal: {fontSize: 36, fontWeight: '700', color: '#ffffff'},
-  gpaGrade: {fontSize: 14, color: '#a78bfa', fontWeight: '600', marginTop: 2},
+  gpaGrade: {fontSize: 14, color: '#C9A84C', fontWeight: '600', marginTop: 2},
   rankBox: {
     backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12,
     padding: 16, alignItems: 'center', gap: 4,
   },
   rankVal: {fontSize: 22, fontWeight: '700', color: '#ffffff'},
-  rankLbl: {fontSize: 10, color: '#a78bfa', fontWeight: '500'},
+  rankLbl: {fontSize: 10, color: '#C9A84C', fontWeight: '500'},
   subjectBlock: {
     backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
-    marginBottom: 12, borderWidth: 1, borderColor: '#ede9fe',
+    marginBottom: 12, borderWidth: 1, borderColor: '#ece5d3',
   },
   subjectHeader: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8},
-  subjectName: {fontSize: 15, fontWeight: '700', color: '#1e1b4b'},
+  subjectName: {fontSize: 15, fontWeight: '700', color: '#0d1f3c'},
   subjectAvgPill: {borderWidth: 1, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3},
   subjectAvgTxt: {fontSize: 12, fontWeight: '700'},
   subjectBar: {height: 4, backgroundColor: '#f3f4f6', borderRadius: 2, overflow: 'hidden', marginBottom: 12},
@@ -672,14 +672,14 @@ const styles = StyleSheet.create({
   testTypeBadge: {borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3},
   testTypeTxt: {fontSize: 11, fontWeight: '600'},
   testDate: {flex: 1, fontSize: 11, color: '#9ca3af'},
-  testMarks: {fontSize: 13, fontWeight: '700', color: '#1e1b4b'},
+  testMarks: {fontSize: 13, fontWeight: '700', color: '#0d1f3c'},
   gradePill: {borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2},
   gradePillTxt: {fontSize: 10, fontWeight: '700'},
   ttDay: {fontSize: 14, fontWeight: '600', color: '#6b7280', marginBottom: 10},
   ttCard: {
     flexDirection: 'row', backgroundColor: '#ffffff',
     borderRadius: 10, marginBottom: 6, overflow: 'hidden',
-    borderWidth: 1, borderColor: '#ede9fe',
+    borderWidth: 1, borderColor: '#ece5d3',
   },
   ttBreak: {opacity: 0.5},
   ttTimeCol: {
@@ -688,6 +688,6 @@ const styles = StyleSheet.create({
   },
   ttTime: {fontSize: 11, fontWeight: '600', color: '#6b7280'},
   ttBody: {flex: 1, padding: 12},
-  ttSubject: {fontSize: 14, fontWeight: '700', color: '#1e1b4b'},
+  ttSubject: {fontSize: 14, fontWeight: '700', color: '#0d1f3c'},
   ttMeta: {fontSize: 11, color: '#9ca3af', marginTop: 2},
 });
