@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
+import Share from 'react-native-share';
+import RNFS from 'react-native-fs';
 import {
   ClipboardDocumentCheckIcon,
   CheckCircleIcon,
@@ -25,6 +27,7 @@ import {
   ChartBarIcon,
   CalendarDaysIcon,
   ClipboardDocumentListIcon,
+  DocumentTextIcon,
 } from 'react-native-heroicons/outline';
 
 import {SCHOOL_CODE} from '../config';
@@ -132,6 +135,201 @@ export default function TeacherScreen({navigation}: any) {
       Alert.alert('Error', 'Could not assign homework. Please try again.');
     } finally {
       setAssigningHW(false);
+    }
+  };
+
+  // ============ DAILY DIARY ============
+  const todayKey = () => new Date().toISOString().split('T')[0];
+
+  const [diaryClass, setDiaryClass] = useState('');
+  const [diaryDate, setDiaryDate] = useState(todayKey());
+  const [diaryRows, setDiaryRows] = useState<{subject: string; task: string}[]>([]);
+  const [diaryGenerated, setDiaryGenerated] = useState(false);
+  const [generatingDiary, setGeneratingDiary] = useState(false);
+  const [sharingDiary, setSharingDiary] = useState(false);
+
+  const dayNameOf = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    return isNaN(d.getTime())
+      ? ''
+      : d.toLocaleDateString('en-US', {weekday: 'long'});
+  };
+
+  const prettyDate = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    return isNaN(d.getTime())
+      ? dateStr
+      : d.toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'});
+  };
+
+  const fetchSchoolName = async () => {
+    try {
+      const doc = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('settings').doc('profile')
+        .get();
+      return doc.data()?.schoolName || 'School';
+    } catch (e) {
+      return 'School';
+    }
+  };
+
+  const generateDiary = async () => {
+    if (!diaryClass) {
+      Alert.alert('Select Class', 'Please select a class for the diary.');
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(diaryDate) || isNaN(new Date(diaryDate + 'T00:00:00').getTime())) {
+      Alert.alert('Invalid Date', 'Please enter the date as YYYY-MM-DD.');
+      return;
+    }
+    setGeneratingDiary(true);
+    setDiaryGenerated(false);
+    try {
+      // Step 1 — teachers who teach this class → their subjects
+      const teachersSnap = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('teachers').get();
+
+      const subjects: string[] = [];
+      teachersSnap.docs.forEach(d => {
+        const t = d.data();
+        const assigned: string[] = t.classesAssigned || [];
+        if (assigned.includes(diaryClass) && t.subject) {
+          if (!subjects.includes(t.subject)) {
+            subjects.push(t.subject);
+          }
+        }
+      });
+
+      // Step 2 — homework for this class on the selected date → subject → task map
+      const hwDoc = await firestore()
+        .collection('schools').doc(SCHOOL_CODE)
+        .collection('homework').doc(diaryClass)
+        .get();
+      const items: any[] = hwDoc.data()?.items || [];
+      const taskMap: {[subject: string]: string} = {};
+      items
+        .filter(it => it.assignedDate === diaryDate)
+        .forEach(it => {
+          const task = [it.title, it.description].filter(Boolean).join(' — ');
+          if (it.subject) {
+            taskMap[it.subject] = taskMap[it.subject]
+              ? `${taskMap[it.subject]}; ${task}`
+              : task;
+          }
+          // include subjects that have homework even if no teacher matched
+          if (it.subject && !subjects.includes(it.subject)) {
+            subjects.push(it.subject);
+          }
+        });
+
+      const rows = subjects
+        .sort((a, b) => a.localeCompare(b))
+        .map(subject => ({subject, task: taskMap[subject] || ''}));
+
+      if (rows.length === 0) {
+        Alert.alert(
+          'Nothing to Show',
+          'No subjects/teachers found for this class. Assign subjects to teachers or add homework first.',
+        );
+        setGeneratingDiary(false);
+        return;
+      }
+
+      setDiaryRows(rows);
+      setDiaryGenerated(true);
+    } catch (e: any) {
+      console.log('❌ QUANTAIP Error:', e);
+      Alert.alert('Error', 'Could not generate diary. Please try again.');
+    } finally {
+      setGeneratingDiary(false);
+    }
+  };
+
+  const buildDiaryText = (schoolName: string) => {
+    const lines = [
+      schoolName,
+      'Daily Diary',
+      `Date: ${prettyDate(diaryDate)}   Day: ${dayNameOf(diaryDate)}   Grade: ${diaryClass}`,
+      '',
+    ];
+    diaryRows.forEach(r => {
+      lines.push(`• ${r.subject}: ${r.task || '—'}`);
+    });
+    return lines.join('\n');
+  };
+
+  const buildDiaryHTML = (schoolName: string) => {
+    const esc = (s: string) =>
+      (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const rowsHtml = diaryRows
+      .map(
+        r => `<tr><td class="subj">${esc(r.subject)}</td><td>${esc(r.task) || '&nbsp;'}</td></tr>`,
+      )
+      .join('');
+    return `<!DOCTYPE html><html><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body { font-family: Helvetica, Arial, sans-serif; color: #0d1f3c; padding: 24px; }
+  .school { text-align: center; font-size: 22px; font-weight: 700; color: #0d1f3c; }
+  .title { text-align: center; font-size: 16px; font-weight: 700; color: #B8960A; letter-spacing: 3px; margin: 4px 0 14px; }
+  .meta { text-align: center; font-size: 13px; color: #4a3728; margin-bottom: 18px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #e8d5a3; padding: 10px 12px; font-size: 13px; text-align: left; vertical-align: top; }
+  th { background: #0d1f3c; color: #C9A84C; font-weight: 700; }
+  td.subj { width: 32%; font-weight: 600; background: #fdf8ee; }
+</style></head><body>
+  <div class="school">${esc(schoolName)}</div>
+  <div class="title">DAILY DIARY</div>
+  <div class="meta">Date: ${esc(prettyDate(diaryDate))} &nbsp; | &nbsp; Day: ${esc(dayNameOf(diaryDate))} &nbsp; | &nbsp; Grade: ${esc(diaryClass)}</div>
+  <table>
+    <thead><tr><th>Subject</th><th>Daily Tasks</th></tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+</body></html>`;
+  };
+
+  const shareDiaryText = async () => {
+    setSharingDiary(true);
+    try {
+      const schoolName = await fetchSchoolName();
+      await Share.open({
+        title: 'Daily Diary',
+        message: buildDiaryText(schoolName),
+        failOnCancel: false,
+      });
+    } catch (e: any) {
+      if (e?.message && !/cancel/i.test(e.message)) {
+        Alert.alert('Share Error', e.message);
+      }
+    } finally {
+      setSharingDiary(false);
+    }
+  };
+
+  const shareDiaryFile = async () => {
+    setSharingDiary(true);
+    try {
+      const schoolName = await fetchSchoolName();
+      const html = buildDiaryHTML(schoolName);
+      const safeName = `Daily_Diary_${diaryClass.replace(/\s+/g, '_')}_${diaryDate}.html`;
+      const path = `${RNFS.CachesDirectoryPath}/${safeName}`;
+      await RNFS.writeFile(path, html, 'utf8');
+      await Share.open({
+        title: 'Daily Diary',
+        subject: `Daily Diary — ${diaryClass} — ${prettyDate(diaryDate)}`,
+        url: `file://${path}`,
+        type: 'text/html',
+        filename: safeName,
+        failOnCancel: false,
+      });
+    } catch (e: any) {
+      if (e?.message && !/cancel/i.test(e.message)) {
+        Alert.alert('Share Error', e.message);
+      }
+    } finally {
+      setSharingDiary(false);
     }
   };
 
@@ -388,6 +586,7 @@ export default function TeacherScreen({navigation}: any) {
     {key: 'Homework', icon: ClipboardDocumentListIcon},
     {key: 'Timetable', icon: CalendarDaysIcon},
     {key: 'My Classes', icon: BookOpenIcon},
+    {key: 'Diary', icon: DocumentTextIcon},
   ];
 
   return (
@@ -957,6 +1156,108 @@ export default function TeacherScreen({navigation}: any) {
         </ScrollView>
       )}
 
+      {/* ── DIARY TAB ── */}
+      {tab === 'Diary' && (
+        <ScrollView style={styles.content}>
+          <Text style={styles.sectionTitle}>Daily Diary Generator</Text>
+
+          {/* Class selector — only assigned classes */}
+          <Text style={styles.diaryLabel}>Class</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 14}}>
+            {classes.length === 0 ? (
+              <Text style={{fontSize: 13, color: '#9ca3af'}}>No classes assigned</Text>
+            ) : (
+              classes.map((cls, i) => (
+                <TouchableOpacity key={i}
+                  style={{
+                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
+                    backgroundColor: diaryClass === cls ? '#0d1f3c' : '#ffffff',
+                    borderWidth: 1, borderColor: diaryClass === cls ? '#0d1f3c' : '#ece5d3',
+                  }}
+                  onPress={() => {setDiaryClass(cls); setDiaryGenerated(false);}}>
+                  <Text style={{
+                    fontSize: 12, fontWeight: '600',
+                    color: diaryClass === cls ? '#C9A84C' : '#6b7280',
+                  }}>{cls}</Text>
+                </TouchableOpacity>
+              ))
+            )}
+          </ScrollView>
+
+          {/* Date selector */}
+          <Text style={styles.diaryLabel}>Date</Text>
+          <View style={{flexDirection: 'row', gap: 8, marginBottom: 6}}>
+            <TextInput
+              style={[styles.marksInput, {flex: 1, marginBottom: 0}]}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#b8a88a"
+              value={diaryDate}
+              onChangeText={val => {setDiaryDate(val); setDiaryGenerated(false);}}
+            />
+            <TouchableOpacity
+              style={styles.diaryTodayBtn}
+              onPress={() => {setDiaryDate(todayKey()); setDiaryGenerated(false);}}>
+              <Text style={styles.diaryTodayTxt}>Today</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.diaryDayHint}>{dayNameOf(diaryDate)}</Text>
+
+          {/* Generate button */}
+          <TouchableOpacity
+            style={[styles.diaryGenBtn, (!diaryClass || generatingDiary) && styles.nextBtnOff]}
+            disabled={!diaryClass || generatingDiary}
+            onPress={generateDiary}>
+            {generatingDiary ? <ActivityIndicator color="#C9A84C" /> : (
+              <Text style={styles.diaryGenTxt}>📄  Generate Diary</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Preview + share */}
+          {diaryGenerated && (
+            <View style={{marginTop: 20}}>
+              <View style={styles.diarySheet}>
+                <Text style={styles.diarySheetSchool}>Daily Diary</Text>
+                <Text style={styles.diarySheetMeta}>
+                  {prettyDate(diaryDate)} · {dayNameOf(diaryDate)} · {diaryClass}
+                </Text>
+
+                <View style={styles.diaryHeadRow}>
+                  <Text style={[styles.diaryHeadCell, {flex: 1}]}>Subject</Text>
+                  <Text style={[styles.diaryHeadCell, {flex: 2}]}>Daily Tasks</Text>
+                </View>
+                {diaryRows.map((r, i) => (
+                  <View key={i} style={styles.diaryBodyRow}>
+                    <Text style={[styles.diarySubjCell, {flex: 1}]}>{r.subject}</Text>
+                    <Text style={[styles.diaryTaskCell, {flex: 2}]}>
+                      {r.task || '—'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={{flexDirection: 'row', gap: 8, marginTop: 14}}>
+                <TouchableOpacity
+                  style={[styles.diaryShareBtn, {flex: 1}]}
+                  disabled={sharingDiary}
+                  onPress={shareDiaryFile}>
+                  {sharingDiary ? <ActivityIndicator color="#C9A84C" /> : (
+                    <Text style={styles.diaryShareTxt}>⬇  Download / Share</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.diaryShareBtnAlt, {flex: 1}]}
+                  disabled={sharingDiary}
+                  onPress={shareDiaryText}>
+                  <Text style={styles.diaryShareTxtAlt}>💬  Share Text</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          <View style={{height: 40}} />
+        </ScrollView>
+      )}
+
       {/* BOTTOM TAB BAR */}
       <View style={styles.bottomBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
@@ -1133,4 +1434,58 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 8,
   },
   markBtnTxt: {color: '#C9A84C', fontSize: 12, fontWeight: '700'},
+  // ── DIARY ──
+  diaryLabel: {fontSize: 12, fontWeight: '700', color: '#8b7355', marginBottom: 8, letterSpacing: 0.5},
+  diaryTodayBtn: {
+    backgroundColor: '#fdf8ee', borderRadius: 10, borderWidth: 1.5, borderColor: '#e8d5a3',
+    paddingHorizontal: 16, justifyContent: 'center',
+  },
+  diaryTodayTxt: {fontSize: 13, fontWeight: '700', color: '#B8960A'},
+  diaryDayHint: {fontSize: 12, color: '#9ca3af', marginBottom: 16, marginLeft: 2},
+  diaryGenBtn: {
+    backgroundColor: '#0d1f3c', borderRadius: 12, padding: 15,
+    alignItems: 'center', borderWidth: 1.5, borderColor: '#C9A84C',
+  },
+  diaryGenTxt: {color: '#C9A84C', fontSize: 15, fontWeight: '700'},
+  diarySheet: {
+    backgroundColor: '#ffffff', borderRadius: 14, padding: 16,
+    borderWidth: 1, borderColor: '#ece5d3',
+  },
+  diarySheetSchool: {
+    fontSize: 16, fontWeight: '700', color: '#B8960A',
+    textAlign: 'center', letterSpacing: 2,
+  },
+  diarySheetMeta: {
+    fontSize: 12, color: '#4a3728', textAlign: 'center',
+    marginTop: 4, marginBottom: 14,
+  },
+  diaryHeadRow: {
+    flexDirection: 'row', backgroundColor: '#0d1f3c',
+    borderTopLeftRadius: 8, borderTopRightRadius: 8,
+  },
+  diaryHeadCell: {
+    color: '#C9A84C', fontSize: 12, fontWeight: '700',
+    paddingVertical: 9, paddingHorizontal: 10,
+  },
+  diaryBodyRow: {
+    flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#ece5d3',
+    borderLeftWidth: 1, borderRightWidth: 1, borderLeftColor: '#ece5d3', borderRightColor: '#ece5d3',
+  },
+  diarySubjCell: {
+    fontSize: 12, fontWeight: '600', color: '#0d1f3c',
+    paddingVertical: 9, paddingHorizontal: 10, backgroundColor: '#fdf8ee',
+  },
+  diaryTaskCell: {
+    fontSize: 12, color: '#4a3728',
+    paddingVertical: 9, paddingHorizontal: 10,
+  },
+  diaryShareBtn: {
+    backgroundColor: '#0d1f3c', borderRadius: 10, padding: 13, alignItems: 'center',
+  },
+  diaryShareTxt: {color: '#C9A84C', fontSize: 13, fontWeight: '700'},
+  diaryShareBtnAlt: {
+    backgroundColor: '#fdf8ee', borderRadius: 10, padding: 13, alignItems: 'center',
+    borderWidth: 1.5, borderColor: '#e8d5a3',
+  },
+  diaryShareTxtAlt: {color: '#B8960A', fontSize: 13, fontWeight: '700'},
 });
