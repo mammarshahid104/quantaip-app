@@ -67,6 +67,19 @@ const CLASS_HIERARCHY = [
 
 const ALL_CLASSES = CLASS_HIERARCHY.flatMap(c => c.classes);
 
+// School code resolver — derive from the logged-in user's email
+// (e.g. ghs-001-adm-001@quantaip.edu.pk → "GHS-001"). Falls back to
+// the hard-coded SCHOOL_CODE if the email can't be parsed.
+const getSchoolCode = (): string => {
+  const email = auth().currentUser?.email || '';
+  const localPart = email.split('@')[0]; // ghs-001-adm-001
+  const segs = localPart.split('-');
+  if (segs.length >= 2 && segs[0] && segs[1]) {
+    return `${segs[0]}-${segs[1]}`.toUpperCase(); // GHS-001
+  }
+  return SCHOOL_CODE;
+};
+
 const generateId = (role: string, index: number): string => {
   const roleCode: any = {teacher: 'TCH', student: 'STU', parent: 'PAR'};
   const num = String(index).padStart(4, '0');
@@ -302,14 +315,32 @@ export default function AdminScreen({navigation}: any) {
   useEffect(() => {loadStats();}, []);
 
   const loadStats = async () => {
+    // Each stat loads independently — a failure in one (e.g. the fee
+    // sub-query) must NOT zero out the others. Previously a single
+    // Promise.all meant any one rejection left every stat at 0.
+    const schoolCode = getSchoolCode();
+    const schoolRef = firestore().collection('schools').doc(schoolCode);
+    console.log('📊 QUANTAIP loadStats — schoolCode:', schoolCode);
+
+    // Students count
     try {
-      const [sSnap, tSnap, feeSnap] = await Promise.all([
-        firestore().collection('schools').doc(SCHOOL_CODE).collection('students').get(),
-        firestore().collection('schools').doc(SCHOOL_CODE).collection('teachers').get(),
-        firestore().collection('schools').doc(SCHOOL_CODE).collection('fees')
-          .doc(new Date().toLocaleString('default', {month: 'long', year: 'numeric'}))
-          .collection('students').where('status', '==', 'paid').get(),
-      ]);
+      const sSnap = await schoolRef.collection('students').get();
+      console.log('📊 QUANTAIP students fetched:', sSnap.size);
+      setStats(prev => ({...prev, students: sSnap.size}));
+    } catch (e) {console.log('❌ QUANTAIP students count error:', e);}
+
+    // Teachers count
+    try {
+      const tSnap = await schoolRef.collection('teachers').get();
+      console.log('📊 QUANTAIP teachers fetched:', tSnap.size);
+      setStats(prev => ({...prev, teachers: tSnap.size}));
+    } catch (e) {console.log('❌ QUANTAIP teachers count error:', e);}
+
+    // Fees collected this month
+    try {
+      const month = new Date().toLocaleString('default', {month: 'long', year: 'numeric'});
+      const feeSnap = await schoolRef.collection('fees').doc(month)
+        .collection('students').where('status', '==', 'paid').get();
       let totalFee = 0;
       feeSnap.docs.forEach(d => {totalFee += d.data().amount || 0;});
       const feeFormatted = totalFee >= 1000000
@@ -317,8 +348,9 @@ export default function AdminScreen({navigation}: any) {
         : totalFee >= 1000
         ? `${(totalFee / 1000).toFixed(0)}K`
         : totalFee.toString();
-      setStats({students: sSnap.size, teachers: tSnap.size, fee: feeFormatted});
-    } catch (e) {console.log('❌ QUANTAIP Error:', e);}
+      console.log('📊 QUANTAIP fees collected:', totalFee);
+      setStats(prev => ({...prev, fee: feeFormatted}));
+    } catch (e) {console.log('❌ QUANTAIP fee count error:', e);}
   };
 
   const loadStudents = async () => {

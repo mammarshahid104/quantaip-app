@@ -94,18 +94,30 @@ export default function FeeScreen() {
       const snapshot = await firestore()
         .collection('schools').doc(SCHOOL_CODE)
         .collection('students').get();
+      console.log('💰 QUANTAIP FeeScreen students fetched:', snapshot.size);
 
       const studentList = await Promise.all(
         snapshot.docs.map(async doc => {
           const student = doc.data();
-          const feeDoc = await firestore()
-            .collection('schools').doc(SCHOOL_CODE)
-            .collection('fees').doc(month)
-            .collection('students').doc(student.id)
-            .get();
-          const feeData = feeDoc.data() || null;
+          // Key the fee lookup off the Firestore document id (always present),
+          // falling back to the stored `id` field. Previously this used
+          // student.id directly — a doc missing that field made .doc(undefined)
+          // throw, rejecting the whole Promise.all and emptying the list.
+          const studentId = student.id || doc.id;
+          let feeData: any = null;
+          try {
+            const feeDoc = await firestore()
+              .collection('schools').doc(SCHOOL_CODE)
+              .collection('fees').doc(month)
+              .collection('students').doc(studentId)
+              .get();
+            feeData = feeDoc.data() || null;
+          } catch (e) {
+            console.log('❌ QUANTAIP fee fetch error for', studentId, e);
+          }
           return {
             ...student,
+            id: studentId,
             feeStatus: feeData?.status || 'pending',
             feePaidOn: feeData?.paidOn || null,
             feeAmount: feeData?.amount || 0,
@@ -114,6 +126,7 @@ export default function FeeScreen() {
       );
       setStudents(studentList);
     } catch (e) {
+      console.log('❌ QUANTAIP FeeScreen loadStudents error:', e);
       setStudents([]);
     } finally {
       setLoading(false);
