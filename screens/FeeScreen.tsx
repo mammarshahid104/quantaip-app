@@ -175,6 +175,14 @@ export default function FeeScreen() {
   };
 
   const markPaid = async (student: any) => {
+    // student.id is normalized in loadStudents (student.id || doc.id), so it
+    // should always be present here — guard anyway so we never write to
+    // .doc(undefined), which would throw.
+    const studentId = student.id;
+    if (!studentId) {
+      Alert.alert('Error', 'This student record has no ID and cannot be updated.');
+      return;
+    }
     const standardFee = feeStructure[student.class] || 0;
     const finalFee = calculateFee(student, standardFee);
 
@@ -190,9 +198,9 @@ export default function FeeScreen() {
               await firestore()
                 .collection('schools').doc(SCHOOL_CODE)
                 .collection('fees').doc(month)
-                .collection('students').doc(student.id)
+                .collection('students').doc(studentId)
                 .set({
-                  id: student.id,
+                  id: studentId,
                   name: student.fullName || student.name || '',
                   class: student.class || '',
                   section: student.section || '',
@@ -202,7 +210,7 @@ export default function FeeScreen() {
                 });
 
               setStudents(prev => prev.map(s =>
-                s.id === student.id
+                s.id === studentId
                   ? {...s, feeStatus: 'paid', feeAmount: finalFee}
                   : s
               ));
@@ -217,6 +225,12 @@ export default function FeeScreen() {
   };
 
   const markUnpaid = async (student: any) => {
+    // Same id guard as markPaid — never write to .doc(undefined).
+    const studentId = student.id;
+    if (!studentId) {
+      Alert.alert('Error', 'This student record has no ID and cannot be updated.');
+      return;
+    }
     Alert.alert('Mark as Unpaid?', `Remove ${student.fullName || student.name}'s payment?`,
       [
         {text: 'Cancel'},
@@ -228,16 +242,16 @@ export default function FeeScreen() {
               await firestore()
                 .collection('schools').doc(SCHOOL_CODE)
                 .collection('fees').doc(month)
-                .collection('students').doc(student.id)
+                .collection('students').doc(studentId)
                 .set({
-                  id: student.id,
+                  id: studentId,
                   name: student.fullName || student.name || '',
                   class: student.class || '',
                   section: student.section || '',
                   status: 'pending',
                 });
               setStudents(prev => prev.map(s =>
-                s.id === student.id ? {...s, feeStatus: 'pending'} : s
+                s.id === studentId ? {...s, feeStatus: 'pending'} : s
               ));
             } catch (e: any) {
               Alert.alert('Error', e.message);

@@ -31,10 +31,16 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            storeFile file(QUANTAIP_UPLOAD_STORE_FILE)
+            storePassword QUANTAIP_UPLOAD_STORE_PASSWORD
+            keyAlias QUANTAIP_UPLOAD_KEY_ALIAS
+            keyPassword QUANTAIP_UPLOAD_KEY_PASSWORD
+        }
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
         }
         release {
             signingConfig signingConfigs.debug

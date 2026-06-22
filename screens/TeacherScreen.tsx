@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Linking,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
@@ -340,6 +341,8 @@ export default function TeacherScreen({navigation}: any) {
   const [loadingAtt, setLoadingAtt] = useState(false);
   const [submittingAtt, setSubmittingAtt] = useState(false);
   const [attSubmitted, setAttSubmitted] = useState(false);
+  const [absentAlert, setAbsentAlert] = useState<any>(null);
+  const [schoolName, setSchoolName] = useState('School');
 
   // Marks states
   const [marksStep, setMarksStep] = useState(1);
@@ -357,6 +360,7 @@ export default function TeacherScreen({navigation}: any) {
 
   useEffect(() => {
     loadTeacher();
+    fetchSchoolName().then(setSchoolName);
   }, []);
 
   const loadTeacher = async () => {
@@ -453,6 +457,46 @@ export default function TeacherScreen({navigation}: any) {
       setSubmittingAtt(false);
     }
   };
+
+  // ── ABSENT WHATSAPP ALERT ──
+  const sendAbsentWhatsApp = async (s: any) => {
+    const parentPhone = (s?.parentPhone || '').toString().trim();
+    if (!parentPhone) {
+      Alert.alert('No Number', 'No parent number saved for this student.');
+      return;
+    }
+    const studentName = s.fullName || s.name || 'Student';
+    const className = s.class || selectedAttClass;
+    const rollNo = s.rollNo || s.id || '—';
+    const date = new Date().toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    });
+
+    const message =
+`Assalam o Alaikum,
+
+آپ کو مطلع کیا جاتا ہے کہ آپ کے بچے *${studentName}* آج *${date}* کو اسکول نہیں آئے۔
+
+📚 Class: ${className}
+📋 Roll No: ${rollNo}
+
+براہ کرم اسکول سے رابطہ کریں۔
+
+— ${schoolName}
+QUANTAIP EduOS`;
+
+    const phone = parentPhone.replace(/[^0-9]/g, '');
+    const intlPhone = phone.startsWith('0') ? '92' + phone.slice(1) : phone;
+    const url = `https://wa.me/${intlPhone}?text=${encodeURIComponent(message)}`;
+
+    try {
+      await Linking.openURL(url);
+    } catch (e: any) {
+      Alert.alert('WhatsApp Error', 'Could not open WhatsApp. Please make sure it is installed.');
+    }
+    setAbsentAlert(null);
+  };
+
   // ── MARKS ──
   const loadMarksStudents = async (cls: string) => {
     setSelectedMarksClass(cls);
@@ -720,7 +764,10 @@ export default function TeacherScreen({navigation}: any) {
                               style={[styles.attBtn,
                                 status === btn.key && {backgroundColor: btn.activeBg, borderColor: btn.activeBorder}
                               ]}
-                              onPress={() => setAttendance(prev => ({...prev, [s.id]: btn.key}))}>
+                              onPress={() => {
+                                setAttendance(prev => ({...prev, [s.id]: btn.key}));
+                                if (btn.key === 'A') {setAbsentAlert(s);}
+                              }}>
                               <Text style={[styles.attBtnTxt,
                                 status === btn.key && {color: btn.activeColor, fontWeight: '700'}
                               ]}>{btn.key}</Text>
@@ -1270,6 +1317,48 @@ export default function TeacherScreen({navigation}: any) {
           ))}
         </ScrollView>
       </View>
+
+      {/* ABSENT WHATSAPP ALERT — bottom sheet */}
+      <Modal
+        visible={!!absentAlert}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAbsentAlert(null)}>
+        <TouchableOpacity
+          style={styles.sheetBackdrop}
+          activeOpacity={1}
+          onPress={() => setAbsentAlert(null)}>
+          <TouchableOpacity activeOpacity={1} style={styles.sheet}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetHeaderTxt}>
+                ⚠️  {absentAlert?.fullName || absentAlert?.name} marked Absent
+              </Text>
+            </View>
+            <View style={styles.sheetBody}>
+              {absentAlert?.parentPhone ? (
+                <>
+                  <View style={styles.sheetRow}>
+                    <Text style={styles.sheetRowLbl}>Parent</Text>
+                    <Text style={styles.sheetRowVal}>{absentAlert.parentPhone}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.waBtn}
+                    onPress={() => sendAbsentWhatsApp(absentAlert)}>
+                    <Text style={styles.waBtnTxt}>📱  Send WhatsApp Alert</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <Text style={styles.noNumberTxt}>No parent number saved</Text>
+              )}
+              <TouchableOpacity
+                style={styles.skipBtn}
+                onPress={() => setAbsentAlert(null)}>
+                <Text style={styles.skipBtnTxt}>Skip</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1277,6 +1366,41 @@ export default function TeacherScreen({navigation}: any) {
 const styles = StyleSheet.create({
   root: {flex: 1, backgroundColor: '#faf8f2'},
   flex: {flex: 1},
+
+  // Absent WhatsApp alert bottom sheet
+  sheetBackdrop: {flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end'},
+  sheet: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingBottom: 32, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: {width: 0, height: -3},
+    shadowOpacity: 0.15, shadowRadius: 12, elevation: 12,
+  },
+  sheetHeader: {
+    backgroundColor: '#0d1f3c', paddingVertical: 18, paddingHorizontal: 20,
+  },
+  sheetHeaderTxt: {color: '#ffffff', fontSize: 16, fontWeight: '700'},
+  sheetBody: {paddingHorizontal: 20, paddingTop: 18},
+  sheetRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 10, marginBottom: 8,
+  },
+  sheetRowLbl: {fontSize: 13, color: '#8b7355', fontWeight: '500'},
+  sheetRowVal: {fontSize: 15, color: '#0d1f3c', fontWeight: '700'},
+  waBtn: {
+    backgroundColor: '#C9A84C', borderRadius: 12, paddingVertical: 15,
+    alignItems: 'center', marginTop: 4,
+  },
+  waBtnTxt: {color: '#ffffff', fontSize: 15, fontWeight: '700'},
+  skipBtn: {
+    backgroundColor: '#f3f4f6', borderRadius: 12, paddingVertical: 14,
+    alignItems: 'center', marginTop: 10,
+  },
+  skipBtnTxt: {color: '#6b7280', fontSize: 14, fontWeight: '600'},
+  noNumberTxt: {
+    fontSize: 14, color: '#8b7355', textAlign: 'center', paddingVertical: 12,
+  },
+
   navbar: {
     backgroundColor: '#0d1f3c', paddingTop: 50, paddingBottom: 16,
     paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center',
