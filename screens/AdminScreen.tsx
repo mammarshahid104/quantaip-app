@@ -55,7 +55,7 @@ import {
 import ClassesScreen from './ClassesScreen';
 import FeeScreen from './FeeScreen';
 
-import {SCHOOL_CODE} from '../config';
+import {getSchoolCode} from '../config';
 import {theme} from '../theme';
 
 const CLASS_HIERARCHY = [
@@ -67,23 +67,10 @@ const CLASS_HIERARCHY = [
 
 const ALL_CLASSES = CLASS_HIERARCHY.flatMap(c => c.classes);
 
-// School code resolver — derive from the logged-in user's email
-// (e.g. ghs-001-adm-001@quantaip.edu.pk → "GHS-001"). Falls back to
-// the hard-coded SCHOOL_CODE if the email can't be parsed.
-const getSchoolCode = (): string => {
-  const email = auth().currentUser?.email || '';
-  const localPart = email.split('@')[0]; // ghs-001-adm-001
-  const segs = localPart.split('-');
-  if (segs.length >= 2 && segs[0] && segs[1]) {
-    return `${segs[0]}-${segs[1]}`.toUpperCase(); // GHS-001
-  }
-  return SCHOOL_CODE;
-};
-
 const generateId = (role: string, index: number): string => {
   const roleCode: any = {teacher: 'TCH', student: 'STU', parent: 'PAR'};
   const num = String(index).padStart(4, '0');
-  return `${SCHOOL_CODE}-${roleCode[role]}-${num}`;
+  return `${getSchoolCode()}-${roleCode[role]}-${num}`;
 };
 
 const generatePass = (name: string): string => {
@@ -227,7 +214,7 @@ export default function AdminScreen({navigation}: any) {
     setLoadingTT(true);
     try {
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('timetable').doc(cls)
         .get();
       const data = doc.data();
@@ -286,7 +273,7 @@ export default function AdminScreen({navigation}: any) {
     setSavingTT(true);
     try {
       await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('timetable').doc(ttClass)
         .set(ttData);
       Alert.alert('Saved ✅', `${ttClass} timetable saved!`);
@@ -357,7 +344,7 @@ export default function AdminScreen({navigation}: any) {
     setLoadingStudents(true);
     try {
       const snap = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students').get();
       setStudentList(snap.docs.map(d => d.data()));
     } catch (e) {console.log('❌ QUANTAIP Error:', e);} finally {setLoadingStudents(false);}
@@ -367,7 +354,7 @@ export default function AdminScreen({navigation}: any) {
     setLoadingTeachers(true);
     try {
       const snap = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('teachers').get();
       setTeacherList(snap.docs.map(d => d.data()));
     } catch (e) {console.log('❌ QUANTAIP Error:', e);} finally {setLoadingTeachers(false);}
@@ -385,8 +372,8 @@ export default function AdminScreen({navigation}: any) {
     try {
       // Ek baar students aur teachers dono load karo
       const [sSnap, tSnap] = await Promise.all([
-        firestore().collection('schools').doc(SCHOOL_CODE).collection('students').get(),
-        firestore().collection('schools').doc(SCHOOL_CODE).collection('teachers').get(),
+        firestore().collection('schools').doc(getSchoolCode()).collection('students').get(),
+        firestore().collection('schools').doc(getSchoolCode()).collection('teachers').get(),
       ]);
       setReportStudents(sSnap.docs.map(d => d.data()));
       setReportTeachers(tSnap.docs.map(d => d.data()));
@@ -411,7 +398,7 @@ export default function AdminScreen({navigation}: any) {
         const status = teacherAtt[t.id];
         if (!status) return;
         const ref = firestore()
-          .collection('schools').doc(SCHOOL_CODE)
+          .collection('schools').doc(getSchoolCode())
           .collection('teachers').doc(t.id);
         batch.set(ref, {attendanceMap: {[dateKey]: status}}, {merge: true});
       });
@@ -451,7 +438,7 @@ export default function AdminScreen({navigation}: any) {
     setSavingClasses(true);
     try {
       await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('teachers').doc(editClassesModal.id)
         .update({
           classesAssigned: editClassesModal.classesAssigned || [],
@@ -482,7 +469,7 @@ export default function AdminScreen({navigation}: any) {
   try {
     // Get all marks for this test type and class
     const marksSnap = await firestore()
-      .collection('schools').doc(SCHOOL_CODE)
+      .collection('schools').doc(getSchoolCode())
       .collection('marks')
       .where('type', '==', resultTestType)
       .where('class', '==', resultClass)
@@ -496,7 +483,7 @@ export default function AdminScreen({navigation}: any) {
 
     // Get all students in this class
     const studentsSnap = await firestore()
-      .collection('schools').doc(SCHOOL_CODE)
+      .collection('schools').doc(getSchoolCode())
       .collection('students')
       .where('class', '==', resultClass)
       .get();
@@ -514,7 +501,7 @@ export default function AdminScreen({navigation}: any) {
       for (const testDoc of marksSnap.docs) {
         const testData = testDoc.data();
         const studentMarkDoc = await firestore()
-          .collection('schools').doc(SCHOOL_CODE)
+          .collection('schools').doc(getSchoolCode())
           .collection('marks').doc(testDoc.id)
           .collection('students').doc(student.id)
           .get();
@@ -563,13 +550,13 @@ export default function AdminScreen({navigation}: any) {
 
     studentResults.forEach(s => {
       const ref = firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('results').doc(resultId)
         .collection('students').doc(s.studentId);
       batch.set(ref, {...s, generatedAt: firestore.FieldValue.serverTimestamp()});
       // DUAL-WRITE: student ke apne doc mein bhi result save karo (1-read pattern)
       const sRef = firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students').doc(s.studentId);
       batch.set(sRef, {
         resultsMap: {[resultId]: {
@@ -584,7 +571,7 @@ export default function AdminScreen({navigation}: any) {
 
     // Save result metadata
     const resultRef = firestore()
-      .collection('schools').doc(SCHOOL_CODE)
+      .collection('schools').doc(getSchoolCode())
       .collection('results').doc(resultId);
     batch.set(resultRef, {
       id: resultId,
@@ -612,7 +599,7 @@ export default function AdminScreen({navigation}: any) {
     setLoading(true);
     try {
       const snapshot = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students').get();
 
       const index = snapshot.size + 1;
@@ -622,24 +609,24 @@ export default function AdminScreen({navigation}: any) {
       const parentPass = generatePass(sName + ' Parent');
 
       await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students').doc(studentId)
         .set({
           id: studentId, fullName: sName, fatherName: sFatherName,
           class: selectedClass, section: sSection, rollNo: sRollNo,
           dob: sDob, parentPhone: sParentPhone, parentId,
           password: studentPass, role: 'student',
-          school: SCHOOL_CODE, status: 'active',
+          school: getSchoolCode(), status: 'active',
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
 
       await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('parents').doc(parentId)
         .set({
           id: parentId, studentId, studentName: sName,
           phone: sParentPhone, password: parentPass,
-          role: 'parent', school: SCHOOL_CODE,
+          role: 'parent', school: getSchoolCode(),
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
 
@@ -669,7 +656,7 @@ export default function AdminScreen({navigation}: any) {
     setLoading(true);
     try {
       const snapshot = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('teachers').get();
 
       const index = snapshot.size + 1;
@@ -677,14 +664,14 @@ export default function AdminScreen({navigation}: any) {
       const defaultPass = generatePass(tName);
 
       await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('teachers').doc(teacherId)
         .set({
           id: teacherId, name: tName, subject: tSubject,
           phone: tPhone,
           classesAssigned: tClasses.split(',').map((c: string) => c.trim()).filter(Boolean),
           password: defaultPass, role: 'teacher',
-          school: SCHOOL_CODE,
+          school: getSchoolCode(),
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
 
@@ -727,7 +714,7 @@ export default function AdminScreen({navigation}: any) {
         const collection = isTeacher ? 'teachers' : 'students';
 
         const snapshot = await firestore()
-          .collection('schools').doc(SCHOOL_CODE)
+          .collection('schools').doc(getSchoolCode())
           .collection(collection).get();
 
         let currentIndex = snapshot.size;
@@ -742,7 +729,7 @@ export default function AdminScreen({navigation}: any) {
             if (isTeacher) {
               const teacherId = generateId('teacher', currentIndex);
               await firestore()
-                .collection('schools').doc(SCHOOL_CODE)
+                .collection('schools').doc(getSchoolCode())
                 .collection('teachers').doc(teacherId)
                 .set({
                   id: teacherId, name,
@@ -750,7 +737,7 @@ export default function AdminScreen({navigation}: any) {
                   phone: row['Phone'] || '',
                   classesAssigned: (row['Classes Assigned'] || '').split(',').map((c: string) => c.trim()).filter(Boolean),
                   password: defaultPass, role: 'teacher',
-                  school: SCHOOL_CODE,
+                  school: getSchoolCode(),
                   createdAt: firestore.FieldValue.serverTimestamp(),
                 });
               await createAuthAccount(
@@ -761,7 +748,7 @@ export default function AdminScreen({navigation}: any) {
               const parentPass = generatePass(name + ' Parent');
 
               await firestore()
-                .collection('schools').doc(SCHOOL_CODE)
+                .collection('schools').doc(getSchoolCode())
                 .collection('students').doc(studentId)
                 .set({
                   id: studentId, fullName: name,
@@ -771,19 +758,19 @@ export default function AdminScreen({navigation}: any) {
                   rollNo: row['Roll No'] || '',
                   parentPhone: row['Parent Phone'] || '',
                   parentId, password: defaultPass,
-                  role: 'student', school: SCHOOL_CODE,
+                  role: 'student', school: getSchoolCode(),
                   status: 'active',
                   createdAt: firestore.FieldValue.serverTimestamp(),
                 });
 
               await firestore()
-                .collection('schools').doc(SCHOOL_CODE)
+                .collection('schools').doc(getSchoolCode())
                 .collection('parents').doc(parentId)
                 .set({
                   id: parentId, studentId, studentName: name,
                   phone: row['Parent Phone'] || '',
                   password: parentPass, role: 'parent',
-                  school: SCHOOL_CODE,
+                  school: getSchoolCode(),
                   createdAt: firestore.FieldValue.serverTimestamp(),
                 });
 
@@ -997,7 +984,7 @@ export default function AdminScreen({navigation}: any) {
             <View style={styles.welcomeCard}>
               <Text style={styles.welcomeEye}>DASHBOARD</Text>
               <Text style={styles.welcomeTitle}>Good morning, <Text style={styles.welcomeAccent}>Admin</Text></Text>
-              <Text style={styles.welcomeSub}>School Code: {SCHOOL_CODE}</Text>
+              <Text style={styles.welcomeSub}>School Code: {getSchoolCode()}</Text>
             </View>
             <View style={styles.statsGrid}>
               {STAT_CARDS.map((s, i) => (
@@ -1095,7 +1082,7 @@ export default function AdminScreen({navigation}: any) {
                                     return;
                                   }
                                   const parentDoc = await firestore()
-                                    .collection('schools').doc(SCHOOL_CODE)
+                                    .collection('schools').doc(getSchoolCode())
                                     .collection('parents').doc(parentId)
                                     .get();
                                   const parentPass = parentDoc.data()?.password || 'Not saved';

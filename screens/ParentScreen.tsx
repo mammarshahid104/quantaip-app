@@ -20,7 +20,7 @@ import {
   ExclamationCircleIcon,
 } from 'react-native-heroicons/outline';
 
-import {SCHOOL_CODE} from '../config';
+import {getSchoolCode} from '../config';
 const TABS = ['Overview', 'Attendance', 'Homework', 'Timetable', 'Fee', 'Results', 'Notifications'];
 
 export default function ParentScreen({navigation}: any) {
@@ -54,7 +54,7 @@ export default function ParentScreen({navigation}: any) {
       const id = user.email?.split('@')[0].toUpperCase();
 
       const parentDoc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('parents').doc(id)
         .get();
 
@@ -64,7 +64,7 @@ export default function ParentScreen({navigation}: any) {
 
         if (parentData?.studentId) {
           const studentDoc = await firestore()
-            .collection('schools').doc(SCHOOL_CODE)
+            .collection('schools').doc(getSchoolCode())
             .collection('students').doc(parentData.studentId)
             .get();
 
@@ -82,14 +82,14 @@ export default function ParentScreen({navigation}: any) {
             setAttendance(records.sort((a, b) => b.date.localeCompare(a.date)));
 
             const feeDoc = await firestore()
-              .collection('schools').doc(SCHOOL_CODE)
+              .collection('schools').doc(getSchoolCode())
               .collection('fees').doc(month)
               .collection('students').doc(studentData?.id)
               .get();
             setFeeStatus(feeDoc.data() || null);
 
             const feeStructDoc = await firestore()
-              .collection('schools').doc(SCHOOL_CODE)
+              .collection('schools').doc(getSchoolCode())
               .collection('feeStructure').doc(studentData?.class)
               .get();
             setFeeStructure(feeStructDoc.data()?.amount || 0);
@@ -97,7 +97,7 @@ export default function ParentScreen({navigation}: any) {
             // Timetable (1 read — bachay ki class ka)
             try {
               const ttDoc = await firestore()
-                .collection('schools').doc(SCHOOL_CODE)
+                .collection('schools').doc(getSchoolCode())
                 .collection('timetable').doc(studentData?.class)
                 .get();
               const ttData = ttDoc.data(); if (ttData) setTimetable(ttData);
@@ -106,7 +106,7 @@ export default function ParentScreen({navigation}: any) {
             // Homework (1 read — bachay ki class ka)
             try {
               const hwDoc = await firestore()
-                .collection('schools').doc(SCHOOL_CODE)
+                .collection('schools').doc(getSchoolCode())
                 .collection('homework').doc(studentData?.class)
                 .get();
               setHomework(hwDoc.data()?.items || []);
@@ -126,7 +126,7 @@ export default function ParentScreen({navigation}: any) {
     try {
       // NAYA TAREEQA: sirf 1 read — bachay ka doc, resultsMap ke saath
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students').doc(student.id)
         .get();
       const map = doc.data()?.resultsMap || {};

@@ -21,7 +21,7 @@ import {
   TrophyIcon,
 } from 'react-native-heroicons/outline';
 
-import {SCHOOL_CODE} from '../config';
+import {getSchoolCode} from '../config';
 const TABS = ['Overview', 'Attendance', 'Homework', 'Grades', 'Results', 'Timetable'];
 
 const TEST_TYPE_ORDER = ['weekly', 'monthly', 'midterm', 'sendup', 'final', 'classtest'];
@@ -61,7 +61,7 @@ export default function StudentScreen({navigation}: any) {
       if (!user) return;
       const id = user.email?.split('@')[0].toUpperCase();
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students').doc(id)
         .get();
       const studentData = doc.data();
@@ -80,7 +80,7 @@ export default function StudentScreen({navigation}: any) {
   const loadTimetable = async (studentData: any) => {
     try {
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('timetable').doc(studentData?.class)
         .get();
       const ttData = doc.data(); if (ttData) setTimetable(ttData);
@@ -90,7 +90,7 @@ export default function StudentScreen({navigation}: any) {
   const loadHomework = async (studentData: any) => {
     try {
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('homework').doc(studentData?.class)
         .get();
       setHomework(doc.data()?.items || []);
@@ -115,7 +115,7 @@ export default function StudentScreen({navigation}: any) {
     try {
       // NAYA TAREEQA: sirf 1 read — apna doc, marksMap ke saath
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students').doc(student.id)
         .get();
       const map = doc.data()?.marksMap || {};
@@ -134,7 +134,7 @@ export default function StudentScreen({navigation}: any) {
     try {
       // NAYA TAREEQA: sirf 1 read — apna doc, resultsMap ke saath
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students').doc(student.id)
         .get();
       const map = doc.data()?.resultsMap || {};

@@ -31,7 +31,7 @@ import {
   DocumentTextIcon,
 } from 'react-native-heroicons/outline';
 
-import {SCHOOL_CODE} from '../config';
+import {getSchoolCode} from '../config';
 import {theme} from '../theme';
 
 const TEST_TYPES = [
@@ -61,7 +61,7 @@ export default function TeacherScreen({navigation}: any) {
     setLoadingTT(true);
     try {
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('timetable').doc(cls)
         .get();
       const data = doc.data();
@@ -95,7 +95,7 @@ export default function TeacherScreen({navigation}: any) {
     setLoadingHW(true);
     try {
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('homework').doc(cls)
         .get();
       setHwList(doc.data()?.items || []);
@@ -125,7 +125,7 @@ export default function TeacherScreen({navigation}: any) {
       // Naya item sab se upar, sirf aakhri 50 rakho (doc halka rahe)
       const updated = [newItem, ...hwList].slice(0, 50);
       await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('homework').doc(hwClass)
         .set({items: updated});
       setHwList(updated);
@@ -166,7 +166,7 @@ export default function TeacherScreen({navigation}: any) {
   const fetchSchoolName = async () => {
     try {
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('settings').doc('profile')
         .get();
       return doc.data()?.schoolName || 'School';
@@ -189,7 +189,7 @@ export default function TeacherScreen({navigation}: any) {
     try {
       // Step 1 — teachers who teach this class → their subjects
       const teachersSnap = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('teachers').get();
 
       const subjects: string[] = [];
@@ -205,7 +205,7 @@ export default function TeacherScreen({navigation}: any) {
 
       // Step 2 — homework for this class on the selected date → subject → task map
       const hwDoc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('homework').doc(diaryClass)
         .get();
       const items: any[] = hwDoc.data()?.items || [];
@@ -370,7 +370,7 @@ export default function TeacherScreen({navigation}: any) {
       const id = user.email?.split('@')[0].toUpperCase();
 
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('teachers').doc(id)
         .get();
 
@@ -381,7 +381,7 @@ export default function TeacherScreen({navigation}: any) {
 
         // Check incharge classes
         const classesSnap = await firestore()
-          .collection('schools').doc(SCHOOL_CODE)
+          .collection('schools').doc(getSchoolCode())
           .collection('classes').get();
 
         const myInchargeClasses: string[] = [];
@@ -403,7 +403,7 @@ export default function TeacherScreen({navigation}: any) {
     setLoadingAtt(true);
     try {
       const snapshot = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students')
         .where('class', '==', cls)
         .get();
@@ -427,7 +427,7 @@ export default function TeacherScreen({navigation}: any) {
       const batch = firestore().batch();
       attStudents.forEach(s => {
         const ref = firestore()
-          .collection('schools').doc(SCHOOL_CODE)
+          .collection('schools').doc(getSchoolCode())
           .collection('attendance').doc(dateKey)
           .collection(selectedAttClass).doc(s.id);
           batch.set(ref, {
@@ -442,7 +442,7 @@ export default function TeacherScreen({navigation}: any) {
         // DUAL-WRITE: student ke apne doc mein bhi attendance save karo
         // taake StudentScreen/ParentScreen sirf 1 read mein sab le sakein
         const studentRef = firestore()
-          .collection('schools').doc(SCHOOL_CODE)
+          .collection('schools').doc(getSchoolCode())
           .collection('students').doc(s.id);
         batch.set(studentRef, {
           attendanceMap: {[dateKey]: attendance[s.id]},
@@ -504,7 +504,7 @@ QUANTAIP EduOS`;
     setLoadingMarks(true);
     try {
       const snapshot = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students')
         .where('class', '==', cls)
         .get();
@@ -537,7 +537,7 @@ QUANTAIP EduOS`;
 
       // Save test info
       const testRef = firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('marks').doc(testId);
 
       batch.set(testRef, {
@@ -563,7 +563,7 @@ QUANTAIP EduOS`;
           percentage >= 50 ? 'C' : 'F';
 
         const ref = firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('marks').doc(testId)
         .collection('students').doc(s.id);
         batch.set(ref, {
@@ -581,7 +581,7 @@ QUANTAIP EduOS`;
         // DUAL-WRITE: student ke apne doc mein bhi marks save karo
         // taake Student/Parent portal sirf 1 read mein sab marks le sakein
         const studentRef = firestore()
-          .collection('schools').doc(SCHOOL_CODE)
+          .collection('schools').doc(getSchoolCode())
           .collection('students').doc(s.id);
         batch.set(studentRef, {
           marksMap: {[testId]: {

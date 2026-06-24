@@ -21,7 +21,7 @@ import {
   UserIcon,
 } from 'react-native-heroicons/outline';
 
-import {SCHOOL_CODE} from '../config';
+import {getSchoolCode} from '../config';
 import {theme} from '../theme';
 
 const CLASS_HIERARCHY = [
@@ -78,7 +78,7 @@ export default function FeeScreen() {
   const loadFeeStructure = async () => {
     try {
       const snap = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('feeStructure').get();
       const structure: {[key: string]: number} = {};
       snap.docs.forEach(d => {
@@ -92,7 +92,7 @@ export default function FeeScreen() {
     setLoading(true);
     try {
       const snapshot = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students').get();
       console.log('💰 QUANTAIP FeeScreen students fetched:', snapshot.size);
 
@@ -107,7 +107,7 @@ export default function FeeScreen() {
           let feeData: any = null;
           try {
             const feeDoc = await firestore()
-              .collection('schools').doc(SCHOOL_CODE)
+              .collection('schools').doc(getSchoolCode())
               .collection('fees').doc(month)
               .collection('students').doc(studentId)
               .get();
@@ -138,7 +138,7 @@ export default function FeeScreen() {
     try {
       const amountNum = parseInt(amount);
       await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('feeStructure').doc(cls)
         .set({amount: amountNum, updatedAt: firestore.FieldValue.serverTimestamp()});
       setFeeStructure(prev => ({...prev, [cls]: amountNum}));
@@ -157,7 +157,7 @@ export default function FeeScreen() {
       }
 
       await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('students').doc(feeModal.id)
         .update(updateData);
 
@@ -196,7 +196,7 @@ export default function FeeScreen() {
           onPress: async () => {
             try {
               await firestore()
-                .collection('schools').doc(SCHOOL_CODE)
+                .collection('schools').doc(getSchoolCode())
                 .collection('fees').doc(month)
                 .collection('students').doc(studentId)
                 .set({
@@ -240,7 +240,7 @@ export default function FeeScreen() {
           onPress: async () => {
             try {
               await firestore()
-                .collection('schools').doc(SCHOOL_CODE)
+                .collection('schools').doc(getSchoolCode())
                 .collection('fees').doc(month)
                 .collection('students').doc(studentId)
                 .set({

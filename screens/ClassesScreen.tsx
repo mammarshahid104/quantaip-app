@@ -20,7 +20,7 @@ import {
   CheckCircleIcon,
 } from 'react-native-heroicons/outline';
 
-import {SCHOOL_CODE} from '../config';
+import {getSchoolCode} from '../config';
 import {theme} from '../theme';
 
 const CLASS_HIERARCHY = [
@@ -47,7 +47,7 @@ export default function ClassesScreen() {
   const loadTeachers = async () => {
     try {
       const snap = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('teachers').get();
       setTeachers(snap.docs.map(d => d.data()));
     } catch (e) {console.log('❌ QUANTAIP Error:', e);}
@@ -58,7 +58,7 @@ export default function ClassesScreen() {
     setLoading(true);
     try {
       const doc = await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('classes').doc(cls)
         .get();
       const data = doc.data();
@@ -88,7 +88,7 @@ export default function ClassesScreen() {
     try {
       const updated = [...sections, newSection.trim()];
       await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('classes').doc(selectedClass)
         .set(
           {sections: updated, updatedAt: firestore.FieldValue.serverTimestamp()},
@@ -113,7 +113,7 @@ export default function ClassesScreen() {
         onPress: async () => {
           const updated = sections.filter(s => s !== sec);
           await firestore()
-            .collection('schools').doc(SCHOOL_CODE)
+            .collection('schools').doc(getSchoolCode())
             .collection('classes').doc(selectedClass)
             .set({sections: updated}, {merge: true});
           setSections(updated);
@@ -125,7 +125,7 @@ export default function ClassesScreen() {
   const assignIncharge = async (teacher: any) => {
     try {
       await firestore()
-        .collection('schools').doc(SCHOOL_CODE)
+        .collection('schools').doc(getSchoolCode())
         .collection('classes').doc(selectedClass)
         .set({
           classIncharge: teacher.id,
@@ -150,7 +150,7 @@ export default function ClassesScreen() {
         style: 'destructive',
         onPress: async () => {
           await firestore()
-            .collection('schools').doc(SCHOOL_CODE)
+            .collection('schools').doc(getSchoolCode())
             .collection('classes').doc(selectedClass)
             .set({
               classIncharge: '',
