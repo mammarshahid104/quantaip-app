@@ -91,39 +91,40 @@ export default function FeeScreen() {
   const loadStudents = async () => {
     setLoading(true);
     try {
-      const snapshot = await firestore()
-        .collection('schools').doc(getSchoolCode())
-        .collection('students').get();
-      console.log('💰 QUANTAIP FeeScreen students fetched:', snapshot.size);
+      // Two queries total instead of N+1: fetch all students AND all of this
+      // month's fee docs in parallel, then merge them locally. Previously we
+      // fetched each student's fee doc one-by-one, so 100 students meant 101
+      // round-trips — the main cause of the slow load.
+      const [studentsSnap, feesSnap] = await Promise.all([
+        firestore()
+          .collection('schools').doc(getSchoolCode())
+          .collection('students').get(),
+        firestore()
+          .collection('schools').doc(getSchoolCode())
+          .collection('fees').doc(month)
+          .collection('students').get(),
+      ]);
+      console.log('💰 QUANTAIP FeeScreen students fetched:', studentsSnap.size);
 
-      const studentList = await Promise.all(
-        snapshot.docs.map(async doc => {
-          const student = doc.data();
-          // Key the fee lookup off the Firestore document id (always present),
-          // falling back to the stored `id` field. Previously this used
-          // student.id directly — a doc missing that field made .doc(undefined)
-          // throw, rejecting the whole Promise.all and emptying the list.
-          const studentId = student.id || doc.id;
-          let feeData: any = null;
-          try {
-            const feeDoc = await firestore()
-              .collection('schools').doc(getSchoolCode())
-              .collection('fees').doc(month)
-              .collection('students').doc(studentId)
-              .get();
-            feeData = feeDoc.data() || null;
-          } catch (e) {
-            console.log('❌ QUANTAIP fee fetch error for', studentId, e);
-          }
-          return {
-            ...student,
-            id: studentId,
-            feeStatus: feeData?.status || 'pending',
-            feePaidOn: feeData?.paidOn || null,
-            feeAmount: feeData?.amount || 0,
-          };
-        })
-      );
+      // Build a studentId → feeData map from the single fees query.
+      const feeMap: {[id: string]: any} = {};
+      feesSnap.docs.forEach(d => {feeMap[d.id] = d.data();});
+
+      // Merge fee data into each student locally — no per-student reads.
+      // Key off the Firestore doc id (always present), falling back to the
+      // stored `id` field, matching how fee docs are written.
+      const studentList = studentsSnap.docs.map(doc => {
+        const student = doc.data();
+        const studentId = student.id || doc.id;
+        const feeData = feeMap[studentId] || null;
+        return {
+          ...student,
+          id: studentId,
+          feeStatus: feeData?.status || 'pending',
+          feePaidOn: feeData?.paidOn || null,
+          feeAmount: feeData?.amount || 0,
+        };
+      });
       setStudents(studentList);
     } catch (e) {
       console.log('❌ QUANTAIP FeeScreen loadStudents error:', e);
@@ -194,6 +195,13 @@ export default function FeeScreen() {
         {
           text: 'Mark Paid',
           onPress: async () => {
+            // Optimistic UI: flip this one student to "paid" immediately so
+            // the screen feels instant. No refetch of the whole list.
+            setStudents(prev => prev.map(s =>
+              s.id === studentId
+                ? {...s, feeStatus: 'paid', feeAmount: finalFee, feePaidOn: new Date()}
+                : s
+            ));
             try {
               await firestore()
                 .collection('schools').doc(getSchoolCode())
@@ -208,14 +216,13 @@ export default function FeeScreen() {
                   status: 'paid',
                   paidOn: firestore.FieldValue.serverTimestamp(),
                 });
-
+            } catch (e: any) {
+              // Write failed — revert the optimistic change and tell the user.
               setStudents(prev => prev.map(s =>
                 s.id === studentId
-                  ? {...s, feeStatus: 'paid', feeAmount: finalFee}
+                  ? {...s, feeStatus: 'pending', feePaidOn: null}
                   : s
               ));
-              Alert.alert('✅ Done!', `Fee marked as paid!`);
-            } catch (e: any) {
               Alert.alert('Error', e.message);
             }
           },
@@ -238,6 +245,10 @@ export default function FeeScreen() {
           text: 'Mark Unpaid',
           style: 'destructive',
           onPress: async () => {
+            // Optimistic UI: flip this one student to "pending" immediately.
+            setStudents(prev => prev.map(s =>
+              s.id === studentId ? {...s, feeStatus: 'pending', feePaidOn: null} : s
+            ));
             try {
               await firestore()
                 .collection('schools').doc(getSchoolCode())
@@ -250,10 +261,11 @@ export default function FeeScreen() {
                   section: student.section || '',
                   status: 'pending',
                 });
-              setStudents(prev => prev.map(s =>
-                s.id === studentId ? {...s, feeStatus: 'pending'} : s
-              ));
             } catch (e: any) {
+              // Write failed — revert the optimistic change back to paid.
+              setStudents(prev => prev.map(s =>
+                s.id === studentId ? {...s, feeStatus: 'paid'} : s
+              ));
               Alert.alert('Error', e.message);
             }
           },
