@@ -186,11 +186,15 @@ export default function TeacherScreen({navigation}: any) {
     }
     setGeneratingDiary(true);
     setDiaryGenerated(false);
+    const schoolCode = getSchoolCode();
+    console.log('📄 Diary → school:', schoolCode, '| class:', diaryClass, '| date:', diaryDate);
     try {
       // Step 1 — teachers who teach this class → their subjects
+      console.log('📄 Diary → fetching teachers…');
       const teachersSnap = await firestore()
-        .collection('schools').doc(getSchoolCode())
+        .collection('schools').doc(schoolCode)
         .collection('teachers').get();
+      console.log('📄 Diary → teachers found:', teachersSnap.size);
 
       const subjects: string[] = [];
       teachersSnap.docs.forEach(d => {
@@ -203,12 +207,16 @@ export default function TeacherScreen({navigation}: any) {
         }
       });
 
+      console.log('📄 Diary → subjects from teachers:', subjects);
+
       // Step 2 — homework for this class on the selected date → subject → task map
+      console.log('📄 Diary → fetching homework for', diaryClass);
       const hwDoc = await firestore()
-        .collection('schools').doc(getSchoolCode())
+        .collection('schools').doc(schoolCode)
         .collection('homework').doc(diaryClass)
         .get();
       const items: any[] = hwDoc.data()?.items || [];
+      console.log('📄 Diary → homework items:', items.length);
       const taskMap: {[subject: string]: string} = {};
       items
         .filter(it => it.assignedDate === diaryDate)
@@ -228,6 +236,7 @@ export default function TeacherScreen({navigation}: any) {
       const rows = subjects
         .sort((a, b) => a.localeCompare(b))
         .map(subject => ({subject, task: taskMap[subject] || ''}));
+      console.log('📄 Diary → rows built:', rows.length);
 
       if (rows.length === 0) {
         Alert.alert(
@@ -240,9 +249,10 @@ export default function TeacherScreen({navigation}: any) {
 
       setDiaryRows(rows);
       setDiaryGenerated(true);
+      console.log('📄 Diary → generated ✅');
     } catch (e: any) {
-      console.log('❌ QUANTAIP Error:', e);
-      Alert.alert('Error', 'Could not generate diary. Please try again.');
+      console.log('❌ Diary generation failed →', e?.code, e?.message, e);
+      Alert.alert('Error', `Could not generate diary. ${e?.message || 'Please try again.'}`);
     } finally {
       setGeneratingDiary(false);
     }
@@ -630,7 +640,8 @@ QUANTAIP EduOS`;
     {key: 'Homework', icon: ClipboardDocumentListIcon},
     {key: 'Timetable', icon: CalendarDaysIcon},
     {key: 'My Classes', icon: BookOpenIcon},
-    {key: 'Diary', icon: DocumentTextIcon},
+    // Diary is only for class incharges — hidden entirely otherwise
+    ...(inchargeClasses.length > 0 ? [{key: 'Diary', icon: DocumentTextIcon}] : []),
   ];
 
   return (
@@ -1208,13 +1219,13 @@ QUANTAIP EduOS`;
         <ScrollView style={styles.content}>
           <Text style={styles.sectionTitle}>Daily Diary Generator</Text>
 
-          {/* Class selector — only assigned classes */}
+          {/* Class selector — only classes this teacher is incharge of */}
           <Text style={styles.diaryLabel}>Class</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 14}}>
-            {classes.length === 0 ? (
-              <Text style={{fontSize: 13, color: '#9ca3af'}}>No classes assigned</Text>
+            {inchargeClasses.length === 0 ? (
+              <Text style={{fontSize: 13, color: '#9ca3af'}}>No incharge classes</Text>
             ) : (
-              classes.map((cls, i) => (
+              inchargeClasses.map((cls, i) => (
                 <TouchableOpacity key={i}
                   style={{
                     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,

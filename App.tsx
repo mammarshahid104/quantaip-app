@@ -88,7 +88,10 @@ function LoginScreen({navigation}: any) {
     setLoading(true);
     setError('');
     try {
+      // Email convention: full lowercased ID + domain.
+      // Works for every role — e.g. TST-001-PAR-0001 → tst-001-par-0001@quantaip.edu.pk
       const email = `${id.toLowerCase()}@quantaip.edu.pk`;
+      console.log('🔐 QUANTAIP Login →', {id, role: detectedRole, email});
       await auth().signInWithEmailAndPassword(email, pass);
       const target =
         detectedRole === 'admin' ? 'Admin' :
@@ -98,6 +101,7 @@ function LoginScreen({navigation}: any) {
       setPass('');
       navigation.reset({index: 0, routes: [{name: target}]});
     } catch (e: any) {
+      console.log('❌ QUANTAIP Login failed →', e?.code, e?.message);
       setError('Invalid ID or password. Please try again.');
     } finally {
       setLoading(false);
