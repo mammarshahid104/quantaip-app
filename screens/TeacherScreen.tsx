@@ -189,27 +189,8 @@ export default function TeacherScreen({navigation}: any) {
     const schoolCode = getSchoolCode();
     console.log('📄 Diary → school:', schoolCode, '| class:', diaryClass, '| date:', diaryDate);
     try {
-      // Step 1 — teachers who teach this class → their subjects
-      console.log('📄 Diary → fetching teachers…');
-      const teachersSnap = await firestore()
-        .collection('schools').doc(schoolCode)
-        .collection('teachers').get();
-      console.log('📄 Diary → teachers found:', teachersSnap.size);
-
-      const subjects: string[] = [];
-      teachersSnap.docs.forEach(d => {
-        const t = d.data();
-        const assigned: string[] = t.classesAssigned || [];
-        if (assigned.includes(diaryClass) && t.subject) {
-          if (!subjects.includes(t.subject)) {
-            subjects.push(t.subject);
-          }
-        }
-      });
-
-      console.log('📄 Diary → subjects from teachers:', subjects);
-
-      // Step 2 — homework for this class on the selected date → subject → task map
+      // Subjects come from this class's homework doc only — teachers can't read
+      // other teachers' docs (Firestore rules), so we never touch that collection.
       console.log('📄 Diary → fetching homework for', diaryClass);
       const hwDoc = await firestore()
         .collection('schools').doc(schoolCode)
@@ -217,20 +198,23 @@ export default function TeacherScreen({navigation}: any) {
         .get();
       const items: any[] = hwDoc.data()?.items || [];
       console.log('📄 Diary → homework items:', items.length);
+
+      // Unique subjects taught in THIS class (derived from its homework)
+      const subjects: string[] = [];
       const taskMap: {[subject: string]: string} = {};
       items
         .filter(it => it.assignedDate === diaryDate)
         .forEach(it => {
-          const task = [it.title, it.description].filter(Boolean).join(' — ');
-          if (it.subject) {
-            taskMap[it.subject] = taskMap[it.subject]
-              ? `${taskMap[it.subject]}; ${task}`
-              : task;
+          if (!it.subject) {
+            return;
           }
-          // include subjects that have homework even if no teacher matched
-          if (it.subject && !subjects.includes(it.subject)) {
+          if (!subjects.includes(it.subject)) {
             subjects.push(it.subject);
           }
+          const task = [it.title, it.description].filter(Boolean).join(' — ');
+          taskMap[it.subject] = taskMap[it.subject]
+            ? `${taskMap[it.subject]}; ${task}`
+            : task;
         });
 
       const rows = subjects
@@ -241,7 +225,7 @@ export default function TeacherScreen({navigation}: any) {
       if (rows.length === 0) {
         Alert.alert(
           'Nothing to Show',
-          'No subjects/teachers found for this class. Assign subjects to teachers or add homework first.',
+          'No homework found for this class on the selected date. Add homework first.',
         );
         setGeneratingDiary(false);
         return;
