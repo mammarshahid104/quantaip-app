@@ -14,7 +14,7 @@ import {
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Share from 'react-native-share';
-import RNFS from 'react-native-fs';
+import {generatePDF} from 'react-native-html-to-pdf';
 import {
   ClipboardDocumentCheckIcon,
   CheckCircleIcon,
@@ -308,15 +308,21 @@ export default function TeacherScreen({navigation}: any) {
     try {
       const schoolName = await fetchSchoolName();
       const html = buildDiaryHTML(schoolName);
-      const safeName = `Daily_Diary_${diaryClass.replace(/\s+/g, '_')}_${diaryDate}.html`;
-      const path = `${RNFS.CachesDirectoryPath}/${safeName}`;
-      await RNFS.writeFile(path, html, 'utf8');
+      const safeName = `Daily_Diary_${diaryClass.replace(/\s+/g, '_')}_${diaryDate}`;
+      const pdf = await generatePDF({
+        html,
+        fileName: safeName,
+        directory: 'Documents',
+      });
+      if (!pdf.filePath) {
+        throw new Error('PDF generation failed.');
+      }
       await Share.open({
         title: 'Daily Diary',
         subject: `Daily Diary — ${diaryClass} — ${prettyDate(diaryDate)}`,
-        url: `file://${path}`,
-        type: 'text/html',
-        filename: safeName,
+        url: `file://${pdf.filePath}`,
+        type: 'application/pdf',
+        filename: `${safeName}.pdf`,
         failOnCancel: false,
       });
     } catch (e: any) {
@@ -1283,7 +1289,7 @@ QUANTAIP EduOS`;
                   disabled={sharingDiary}
                   onPress={shareDiaryFile}>
                   {sharingDiary ? <ActivityIndicator color="#C9A84C" /> : (
-                    <Text style={styles.diaryShareTxt}>⬇  Download / Share</Text>
+                    <Text style={styles.diaryShareTxt}>⬇  Download PDF</Text>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity
