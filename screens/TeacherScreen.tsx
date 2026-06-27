@@ -309,20 +309,24 @@ export default function TeacherScreen({navigation}: any) {
       const schoolName = await fetchSchoolName();
       const html = buildDiaryHTML(schoolName);
       const safeName = `Daily_Diary_${diaryClass.replace(/\s+/g, '_')}_${diaryDate}`;
+      // Generate as base64 (no directory → app cache, no storage permission
+      // needed) and share via a data: URL. react-native-share then writes its
+      // own cache file through its bundled FileProvider, which avoids the
+      // "Uri.getScheme() on null" error seen when sharing a raw file:// path.
       const pdf = await generatePDF({
         html,
         fileName: safeName,
-        directory: 'Documents',
+        base64: true,
       });
-      if (!pdf.filePath) {
-        throw new Error('PDF generation failed.');
+      if (!pdf || !pdf.base64) {
+        throw new Error('PDF could not be created. Please try again.');
       }
       await Share.open({
         title: 'Daily Diary',
         subject: `Daily Diary — ${diaryClass} — ${prettyDate(diaryDate)}`,
-        url: `file://${pdf.filePath}`,
+        url: `data:application/pdf;base64,${pdf.base64}`,
         type: 'application/pdf',
-        filename: `${safeName}.pdf`,
+        filename: safeName,
         failOnCancel: false,
       });
     } catch (e: any) {
