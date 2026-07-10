@@ -409,6 +409,20 @@ export default function TeacherScreen({navigation}: any) {
     }
   };
 
+  const markAllPresent = () => {
+    const newAttendance: {[key: string]: string} = {};
+    attStudents.forEach(s => { newAttendance[s.id] = 'P'; });
+    setAttendance(newAttendance);
+    Alert.alert('Done', 'All students marked Present. Tap individual students to change if needed.');
+  };
+
+  const markAllAbsent = () => {
+    const newAttendance: {[key: string]: string} = {};
+    attStudents.forEach(s => { newAttendance[s.id] = 'A'; });
+    setAttendance(newAttendance);
+    Alert.alert('Done', `${attStudents.length} students marked Absent. Submit to save, then send WhatsApp alerts individually if needed.`);
+  };
+
   const submitAttendance = async () => {
     const unmarked = attStudents.filter(s => !attendance[s.id]);
     if (unmarked.length > 0) {
@@ -724,6 +738,16 @@ QUANTAIP EduOS`;
                   <Text style={styles.summaryLbl}>Late</Text>
                 </View>
               </View>
+              {!loadingAtt && attStudents.length > 0 && (
+                <View style={styles.bulkRow}>
+                  <TouchableOpacity style={[styles.bulkBtn, styles.bulkBtnPresent]} onPress={markAllPresent}>
+                    <Text style={[styles.bulkBtnTxt, {color: '#16a34a'}]}>✓ Mark All Present</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.bulkBtn, styles.bulkBtnAbsent]} onPress={markAllAbsent}>
+                    <Text style={[styles.bulkBtnTxt, {color: '#ef4444'}]}>✗ Mark All Absent</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
               {loadingAtt ? (
                 <ActivityIndicator color="#B8960A" size="large" style={{marginTop: 30}} />
               ) : (
@@ -1472,6 +1496,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ece5d3',
   },
   summaryCard: {flex: 1, padding: 10, alignItems: 'center', borderRadius: 10, borderWidth: 1},
+  bulkRow: {
+    flexDirection: 'row', gap: 10, paddingHorizontal: 12, paddingVertical: 10,
+    backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ece5d3',
+  },
+  bulkBtn: {
+    flex: 1, paddingVertical: 11, borderRadius: 12, borderWidth: 1.5, alignItems: 'center',
+  },
+  bulkBtnPresent: {backgroundColor: '#f0fdf4', borderColor: '#86efac'},
+  bulkBtnAbsent: {backgroundColor: '#fef2f2', borderColor: '#fca5a5'},
+  bulkBtnTxt: {fontSize: 13, fontWeight: '700'},
   summaryVal: {fontSize: 22, fontWeight: '700'},
   summaryLbl: {fontSize: 11, color: '#6b7280', fontWeight: '500', marginTop: 2},
   studentRow: {
