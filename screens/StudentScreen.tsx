@@ -160,7 +160,10 @@ export default function StudentScreen({navigation}: any) {
     return acc;
   }, {});
 
-  const allPercentages = marks.map(m => m.percentage || 0);
+  // Tests the student was absent for aren't scores — they're excluded from
+  // every average rather than counted as a zero.
+  const attemptedMarks = marks.filter(m => !m.isAbsent);
+  const allPercentages = attemptedMarks.map(m => m.percentage || 0);
   const overallAvg = allPercentages.length > 0
     ? Math.round(allPercentages.reduce((a, b) => a + b, 0) / allPercentages.length)
     : 0;
@@ -171,6 +174,10 @@ export default function StudentScreen({navigation}: any) {
 
   const gradeColor = (pct: number) =>
     pct >= 80 ? '#16a34a' : pct >= 60 ? '#C9A84C' : pct >= 40 ? '#f59e0b' : '#ef4444';
+
+  // Absent entries get a neutral grey — never the red of a failing grade.
+  const ABSENT_COLOR = '#9ca3af';
+  const markColor = (m: any) => (m?.isAbsent ? ABSENT_COLOR : gradeColor(m?.percentage || 0));
 
   const present = attendance.filter(a => a.status === 'P').length;
   const absent = attendance.filter(a => a.status === 'A').length;
@@ -351,42 +358,60 @@ export default function StudentScreen({navigation}: any) {
             ) : (
               Object.keys(marksBySubject).map((subject, si) => {
                 const subjectMarks = marksBySubject[subject];
-                const subjectAvg = Math.round(
-                  subjectMarks.reduce((a: number, m: any) => a + (m.percentage || 0), 0) / subjectMarks.length
-                );
-                const col = gradeColor(subjectAvg);
+                // Average over attempted tests only; a subject where every test
+                // was missed shows 0% with no attempts rather than a fail.
+                const attempted = subjectMarks.filter((m: any) => !m.isAbsent);
+                const subjectAvg = attempted.length > 0
+                  ? Math.round(
+                      attempted.reduce((a: number, m: any) => a + (m.percentage || 0), 0) / attempted.length,
+                    )
+                  : 0;
+                const absentCount = subjectMarks.length - attempted.length;
+                const col = attempted.length > 0 ? gradeColor(subjectAvg) : ABSENT_COLOR;
                 return (
                   <View key={si} style={styles.subjectBlock}>
                     <View style={styles.subjectHeader}>
                       <Text style={styles.subjectName}>{subject}</Text>
                       <View style={[styles.subjectAvgPill, {backgroundColor: col + '20', borderColor: col}]}>
-                        <Text style={[styles.subjectAvgTxt, {color: col}]}>{subjectAvg}%</Text>
+                        <Text style={[styles.subjectAvgTxt, {color: col}]}>
+                          {attempted.length > 0 ? `${subjectAvg}%` : 'AB'}
+                        </Text>
                       </View>
                     </View>
+                    {absentCount > 0 && attempted.length > 0 && (
+                      <Text style={styles.absentNote}>
+                        Average from {attempted.length} of {subjectMarks.length} tests ({absentCount} absent)
+                      </Text>
+                    )}
                     <View style={styles.subjectBar}>
                       <View style={[styles.subjectBarFill, {width: `${subjectAvg}%`, backgroundColor: col}]} />
                     </View>
                     {subjectMarks
                       .sort((a: any, b: any) => TEST_TYPE_ORDER.indexOf(a.testType) - TEST_TYPE_ORDER.indexOf(b.testType))
-                      .map((m: any, mi: number) => (
-                        <View key={mi} style={styles.testRow}>
-                          <View style={[styles.testTypeBadge, {backgroundColor: gradeColor(m.percentage) + '15'}]}>
-                            <Text style={[styles.testTypeTxt, {color: gradeColor(m.percentage)}]}>
-                              {TEST_TYPE_LABELS[m.testType] || m.testType}
+                      .map((m: any, mi: number) => {
+                        const mc = markColor(m);
+                        return (
+                          <View key={mi} style={styles.testRow}>
+                            <View style={[styles.testTypeBadge, {backgroundColor: mc + '15'}]}>
+                              <Text style={[styles.testTypeTxt, {color: mc}]}>
+                                {TEST_TYPE_LABELS[m.testType] || m.testType}
+                              </Text>
+                            </View>
+                            <Text style={styles.testDate}>{m.date}</Text>
+                            <Text style={[styles.testMarks, m.isAbsent && {color: ABSENT_COLOR}]}>
+                              {m.isAbsent ? 'Absent' : `${m.obtained}/${m.total}`}
                             </Text>
+                            <View style={[styles.gradePill, {
+                              backgroundColor: mc + '20',
+                              borderColor: mc,
+                            }]}>
+                              <Text style={[styles.gradePillTxt, {color: mc}]}>
+                                {m.isAbsent ? 'AB' : m.grade}
+                              </Text>
+                            </View>
                           </View>
-                          <Text style={styles.testDate}>{m.date}</Text>
-                          <Text style={styles.testMarks}>{m.obtained}/{m.total}</Text>
-                          <View style={[styles.gradePill, {
-                            backgroundColor: gradeColor(m.percentage) + '20',
-                            borderColor: gradeColor(m.percentage),
-                          }]}>
-                            <Text style={[styles.gradePillTxt, {color: gradeColor(m.percentage)}]}>
-                              {m.grade}
-                            </Text>
-                          </View>
-                        </View>
-                      ))}
+                        );
+                      })}
                   </View>
                 );
               })
@@ -449,17 +474,24 @@ export default function StudentScreen({navigation}: any) {
                     }}>
                       <Text style={{fontSize: 13, color: '#374151', fontWeight: '500'}}>{subj}</Text>
                       <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                        <Text style={{fontSize: 13, fontWeight: '600', color: '#0d1f3c'}}>
-                          {r.subjects[subj].obtained}/{r.subjects[subj].total}
+                        <Text style={{
+                          fontSize: 13, fontWeight: '600',
+                          color: r.subjects[subj].isAbsent ? ABSENT_COLOR : '#0d1f3c',
+                        }}>
+                          {r.subjects[subj].isAbsent
+                            ? 'Absent'
+                            : `${r.subjects[subj].obtained}/${r.subjects[subj].total}`}
                         </Text>
                         <View style={{
-                          backgroundColor: r.subjects[subj].grade === 'A+' ? '#f0fdf4' :
+                          backgroundColor: r.subjects[subj].isAbsent ? '#f3f4f6' :
+                            r.subjects[subj].grade === 'A+' ? '#f0fdf4' :
                             r.subjects[subj].grade === 'F' ? '#fef2f2' : '#fdf8ee',
                           borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
                         }}>
                           <Text style={{
                             fontSize: 11, fontWeight: '700',
-                            color: r.subjects[subj].grade === 'A+' ? '#16a34a' :
+                            color: r.subjects[subj].isAbsent ? ABSENT_COLOR :
+                              r.subjects[subj].grade === 'A+' ? '#16a34a' :
                               r.subjects[subj].grade === 'F' ? '#ef4444' : '#C9A84C',
                           }}>{r.subjects[subj].grade}</Text>
                         </View>
@@ -473,12 +505,18 @@ export default function StudentScreen({navigation}: any) {
                   }}>
                     <Text style={{fontSize: 14, fontWeight: '700', color: '#0d1f3c'}}>Total</Text>
                     <View style={{alignItems: 'flex-end'}}>
-                      <Text style={{fontSize: 16, fontWeight: '700', color: '#C9A84C'}}>
-                        {r.totalObtained}/{r.totalMarks}
+                      <Text style={{
+                        fontSize: 16, fontWeight: '700',
+                        color: r.isAbsent ? ABSENT_COLOR : '#C9A84C',
+                      }}>
+                        {r.isAbsent ? 'Absent' : `${r.totalObtained}/${r.totalMarks}`}
                       </Text>
-                      <Text style={{fontSize: 12, color: '#6b7280'}}>{r.percentage}% · Grade {r.grade}</Text>
+                      <Text style={{fontSize: 12, color: '#6b7280'}}>
+                        {r.isAbsent ? 'Absent for all tests' : `${r.percentage}% · Grade ${r.grade}`}
+                      </Text>
                     </View>
                   </View>
+                  {r.note ? <Text style={styles.absentNote}>{r.note}</Text> : null}
                 </View>
               ))
             )}
@@ -675,6 +713,10 @@ const styles = StyleSheet.create({
   testMarks: {fontSize: 13, fontWeight: '700', color: '#0d1f3c'},
   gradePill: {borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2},
   gradePillTxt: {fontSize: 10, fontWeight: '700'},
+  absentNote: {
+    fontSize: 11, color: '#9ca3af', fontStyle: 'italic',
+    marginTop: 6, marginBottom: 2,
+  },
   ttDay: {fontSize: 14, fontWeight: '600', color: '#6b7280', marginBottom: 10},
   ttCard: {
     flexDirection: 'row', backgroundColor: '#ffffff',

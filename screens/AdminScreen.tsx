@@ -514,6 +514,8 @@ export default function AdminScreen({navigation}: any) {
     for (const student of studentList) {
       let totalObtained = 0;
       let totalMarks = 0;
+      let testsCounted = 0;
+      let testsAbsent = 0;
       const subjects: any = {};
 
       for (const testDoc of marksSnap.docs) {
@@ -526,9 +528,24 @@ export default function AdminScreen({navigation}: any) {
 
         const markData = studentMarkDoc.data();
         if (markData) {
+          // A test the student was absent for contributes nothing to the
+          // totals — it is not a zero, so it must not drag the average down.
+          if (markData.isAbsent) {
+            testsAbsent++;
+            subjects[testData.subject] = {
+              obtained: null,
+              total: testData.totalMarks,
+              isAbsent: true,
+              percentage: null,
+              grade: 'AB',
+            };
+            continue;
+          }
+          testsCounted++;
           subjects[testData.subject] = {
             obtained: markData?.obtained || 0,
             total: testData.totalMarks,
+            isAbsent: false,
             percentage: markData?.percentage || 0,
             grade: markData?.grade || 'F',
           };
@@ -538,10 +555,21 @@ export default function AdminScreen({navigation}: any) {
       }
 
       if (Object.keys(subjects).length > 0) {
-        const percentage = totalMarks > 0 ? Math.round((totalObtained / totalMarks) * 100) : 0;
-        const grade = percentage >= 90 ? 'A+' : percentage >= 80 ? 'A' :
-          percentage >= 70 ? 'B+' : percentage >= 60 ? 'B' :
-          percentage >= 50 ? 'C' : 'F';
+        const totalTests = testsCounted + testsAbsent;
+        // Absent for every test → no percentage at all, just "Absent".
+        const allAbsent = testsCounted === 0;
+        const percentage = allAbsent
+          ? null
+          : totalMarks > 0 ? Math.round((totalObtained / totalMarks) * 100) : 0;
+        const grade = allAbsent ? 'AB' :
+          percentage! >= 90 ? 'A+' : percentage! >= 80 ? 'A' :
+          percentage! >= 70 ? 'B+' : percentage! >= 60 ? 'B' :
+          percentage! >= 50 ? 'C' : 'F';
+        const note = allAbsent
+          ? `Absent for all ${totalTests} test(s)`
+          : testsAbsent > 0
+            ? `Result based on ${testsCounted}/${totalTests} tests (${testsAbsent} absent)`
+            : '';
 
         studentResults.push({
           studentId: student.id,
@@ -550,16 +578,26 @@ export default function AdminScreen({navigation}: any) {
           class: resultClass,
           section: student.section,
           subjects,
-          totalObtained,
-          totalMarks,
+          totalObtained: allAbsent ? null : totalObtained,
+          totalMarks: allAbsent ? null : totalMarks,
           percentage,
           grade,
+          isAbsent: allAbsent,
+          testsCounted,
+          testsAbsent,
+          note,
         });
       }
     }
 
-    // Sort by percentage — assign positions
-    studentResults.sort((a, b) => b.percentage - a.percentage);
+    // Sort by percentage — assign positions. Students absent for every test
+    // have no percentage, so they rank last rather than sorting as a zero.
+    studentResults.sort((a, b) => {
+      if (a.isAbsent && b.isAbsent) return 0;
+      if (a.isAbsent) return 1;
+      if (b.isAbsent) return -1;
+      return b.percentage - a.percentage;
+    });
     studentResults.forEach((s, i) => {s.position = i + 1;});
 
     // Save to Firestore
@@ -1566,18 +1604,23 @@ export default function AdminScreen({navigation}: any) {
                 </View>
                 <View>
                   <Text style={styles.studentName}>{s.name}</Text>
-                  <Text style={styles.studentMeta}>Roll {s.rollNo} · {s.percentage}%</Text>
+                  <Text style={styles.studentMeta}>
+                    Roll {s.rollNo} · {s.isAbsent ? 'Absent' : `${s.percentage}%`}
+                  </Text>
                 </View>
               </View>
               <View style={{
-                backgroundColor: s.grade === 'A+' ? '#f0fdf4' : s.grade === 'F' ? '#fef2f2' : '#fdf8ee',
+                backgroundColor: s.isAbsent ? '#f3f4f6' :
+                  s.grade === 'A+' ? '#f0fdf4' : s.grade === 'F' ? '#fef2f2' : '#fdf8ee',
                 borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
                 borderWidth: 1,
-                borderColor: s.grade === 'A+' ? '#86efac' : s.grade === 'F' ? '#fca5a5' : '#e8d5a3',
+                borderColor: s.isAbsent ? '#e5e7eb' :
+                  s.grade === 'A+' ? '#86efac' : s.grade === 'F' ? '#fca5a5' : '#e8d5a3',
               }}>
                 <Text style={{
                   fontSize: 14, fontWeight: '700',
-                  color: s.grade === 'A+' ? '#16a34a' : s.grade === 'F' ? '#ef4444' : '#B8960A',
+                  color: s.isAbsent ? '#9ca3af' :
+                    s.grade === 'A+' ? '#16a34a' : s.grade === 'F' ? '#ef4444' : '#B8960A',
                 }}>{s.grade}</Text>
               </View>
             </View>
@@ -1589,8 +1632,13 @@ export default function AdminScreen({navigation}: any) {
                 paddingVertical: 4, borderTopWidth: 1, borderTopColor: '#f3f4f6',
               }}>
                 <Text style={{fontSize: 12, color: '#6b7280'}}>{subj}</Text>
-                <Text style={{fontSize: 12, fontWeight: '600', color: '#1e1b4b'}}>
-                  {s.subjects[subj].obtained}/{s.subjects[subj].total} · {s.subjects[subj].grade}
+                <Text style={{
+                  fontSize: 12, fontWeight: '600',
+                  color: s.subjects[subj].isAbsent ? '#9ca3af' : '#1e1b4b',
+                }}>
+                  {s.subjects[subj].isAbsent
+                    ? 'Absent · AB'
+                    : `${s.subjects[subj].obtained}/${s.subjects[subj].total} · ${s.subjects[subj].grade}`}
                 </Text>
               </View>
             ))}
@@ -1600,10 +1648,16 @@ export default function AdminScreen({navigation}: any) {
               marginTop: 8, paddingTop: 8, borderTopWidth: 1.5, borderTopColor: '#ece5d3',
             }}>
               <Text style={{fontSize: 13, fontWeight: '700', color: '#0d1f3c'}}>Total</Text>
-              <Text style={{fontSize: 13, fontWeight: '700', color: '#B8960A'}}>
-                {s.totalObtained}/{s.totalMarks} ({s.percentage}%)
+              <Text style={{
+                fontSize: 13, fontWeight: '700',
+                color: s.isAbsent ? '#9ca3af' : '#B8960A',
+              }}>
+                {s.isAbsent
+                  ? 'Absent'
+                  : `${s.totalObtained}/${s.totalMarks} (${s.percentage}%)`}
               </Text>
             </View>
+            {s.note ? <Text style={styles.resultNote}>{s.note}</Text> : null}
           </View>
         ))}
       </View>
@@ -2069,6 +2123,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#ece5d3', marginBottom: 12,
   },
   searchInput: {flex: 1, fontSize: 14, color: '#0d1f3c'},
+  resultNote: {
+    fontSize: 11, color: '#9ca3af', fontStyle: 'italic', marginTop: 6,
+  },
   warnBox: {
     backgroundColor: '#fffbeb', borderRadius: 10, padding: 12,
     borderWidth: 1, borderColor: '#fde68a', marginBottom: 12, gap: 6,

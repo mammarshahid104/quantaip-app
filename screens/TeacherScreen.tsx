@@ -345,6 +345,9 @@ export default function TeacherScreen({navigation}: any) {
   const [selectedMarksClass, setSelectedMarksClass] = useState('');
   const [marksStudents, setMarksStudents] = useState<any[]>([]);
   const [marks, setMarks] = useState<{[key: string]: string}>({});
+  // Students marked absent for this test — saved as isAbsent instead of a 0,
+  // so "didn't sit the test" never looks like "scored zero".
+  const [absentMarks, setAbsentMarks] = useState<{[key: string]: boolean}>({});
   const [loadingMarks, setLoadingMarks] = useState(false);
   const [submittingMarks, setSubmittingMarks] = useState(false);
 
@@ -509,6 +512,7 @@ QUANTAIP EduOS`;
   const loadMarksStudents = async (cls: string) => {
     setSelectedMarksClass(cls);
     setMarks({});
+    setAbsentMarks({});
     setLoadingMarks(true);
     try {
       const snapshot = await firestore()
@@ -530,7 +534,10 @@ QUANTAIP EduOS`;
       Alert.alert('Error', 'Please fill all fields');
       return;
     }
-    const unmarked = marksStudents.filter(s => marks[s.id] === undefined || marks[s.id] === '');
+    // Absent students don't need a number — everyone else does.
+    const unmarked = marksStudents.filter(
+      s => !absentMarks[s.id] && (marks[s.id] === undefined || marks[s.id] === ''),
+    );
     if (unmarked.length > 0) {
       Alert.alert('Incomplete', `${unmarked.length} students have no marks entered!`);
       return;
@@ -563,12 +570,17 @@ QUANTAIP EduOS`;
 
       // Save each student's marks
       marksStudents.forEach(s => {
+        // Absent → obtained/percentage stay null and the grade is "AB", so
+        // nothing downstream mistakes a missed test for a zero.
+        const isAbsent = !!absentMarks[s.id];
         const obtainedRaw = marks[s.id] || '0';
-        const obtained = isNaN(parseInt(obtainedRaw)) ? 0 : parseInt(obtainedRaw);
-        const percentage = Math.round((obtained / total) * 100);
-        const grade = percentage >= 90 ? 'A+' : percentage >= 80 ? 'A' :
-          percentage >= 70 ? 'B+' : percentage >= 60 ? 'B' :
-          percentage >= 50 ? 'C' : 'F';
+        const parsed = isNaN(parseInt(obtainedRaw)) ? 0 : parseInt(obtainedRaw);
+        const obtained = isAbsent ? null : parsed;
+        const percentage = isAbsent ? null : Math.round((parsed / total) * 100);
+        const grade = isAbsent ? 'AB' :
+          percentage! >= 90 ? 'A+' : percentage! >= 80 ? 'A' :
+          percentage! >= 70 ? 'B+' : percentage! >= 60 ? 'B' :
+          percentage! >= 50 ? 'C' : 'F';
 
         const ref = firestore()
         .collection('schools').doc(getSchoolCode())
@@ -579,6 +591,7 @@ QUANTAIP EduOS`;
           name: s.fullName || s.name,
           obtained,
           total,
+          isAbsent,
           percentage,
           grade,
           class: selectedMarksClass,
@@ -599,6 +612,7 @@ QUANTAIP EduOS`;
             subject: teacher?.subject,
             obtained,
             total,
+            isAbsent,
             percentage,
             grade,
             class: selectedMarksClass,
@@ -619,6 +633,7 @@ QUANTAIP EduOS`;
       setSelectedMarksClass('');
       setMarksStudents([]);
       setMarks({});
+      setAbsentMarks({});
 
     } catch (e: any) {
       Alert.alert('Error', e.message);
@@ -909,10 +924,20 @@ QUANTAIP EduOS`;
                 <ActivityIndicator color="#B8960A" size="large" style={{marginTop: 30}} />
               ) : (
                 marksStudents.map((s, i) => {
+                  const isAbsent = !!absentMarks[s.id];
                   const obtained = marks[s.id] || '';
                   const total = parseInt(totalMarks);
                   const pct = obtained ? Math.round((parseInt(obtained) / total) * 100) : 0;
-                  const isOver = obtained && parseInt(obtained) > total;
+                  const isOver = !isAbsent && obtained && parseInt(obtained) > total;
+
+                  // Toggling Absent on clears whatever number was typed, so an
+                  // absent student can never be saved with a score.
+                  const toggleAbsent = () => {
+                    setAbsentMarks(prev => ({...prev, [s.id]: !prev[s.id]}));
+                    if (!isAbsent) {
+                      setMarks(prev => ({...prev, [s.id]: ''}));
+                    }
+                  };
 
                   return (
                     <View key={i} style={styles.marksRow}>
@@ -924,20 +949,35 @@ QUANTAIP EduOS`;
                       <View style={styles.studentInfo}>
                         <Text style={styles.studentName}>{s.fullName || s.name}</Text>
                         <Text style={styles.studentRoll}>
-                          {obtained ? `${pct}%` : 'Not entered'}
+                          {isAbsent ? 'Absent (AB)' : obtained ? `${pct}%` : 'Not entered'}
                         </Text>
                       </View>
                       <View style={styles.marksInputWrap}>
                         <TextInput
-                          style={[styles.marksInputSmall, isOver && {borderColor: '#ef4444'}]}
-                          placeholder="0"
+                          style={[
+                            styles.marksInputSmall,
+                            isOver && {borderColor: '#ef4444'},
+                            isAbsent && styles.marksInputOff,
+                          ]}
+                          placeholder={isAbsent ? '—' : '0'}
                           placeholderTextColor="#b8a88a"
                           keyboardType="number-pad"
-                          value={obtained}
+                          editable={!isAbsent}
+                          value={isAbsent ? '' : obtained}
                           onChangeText={val => setMarks(prev => ({...prev, [s.id]: val}))}
                         />
                         <Text style={styles.marksTotal}>/{totalMarks}</Text>
                       </View>
+                      <TouchableOpacity
+                        style={styles.absentToggle}
+                        onPress={toggleAbsent}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{checked: isAbsent}}>
+                        <View style={[styles.absentBox, isAbsent && styles.absentBoxOn]}>
+                          {isAbsent && <Text style={styles.absentTick}>✓</Text>}
+                        </View>
+                        <Text style={[styles.absentLbl, isAbsent && styles.absentLblOn]}>Absent</Text>
+                      </TouchableOpacity>
                     </View>
                   );
                 })
@@ -1556,6 +1596,17 @@ const styles = StyleSheet.create({
     textAlign: 'center', fontSize: 14, fontWeight: '700', color: '#0d1f3c',
   },
   marksTotal: {fontSize: 13, color: '#9ca3af', fontWeight: '500'},
+  marksInputOff: {backgroundColor: '#f3f4f6', borderColor: '#e5e7eb', color: '#9ca3af'},
+  absentToggle: {alignItems: 'center', gap: 3, width: 46},
+  absentBox: {
+    width: 20, height: 20, borderRadius: 5, borderWidth: 1.5,
+    borderColor: '#d1d5db', backgroundColor: '#ffffff',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  absentBoxOn: {backgroundColor: '#6b7280', borderColor: '#6b7280'},
+  absentTick: {fontSize: 12, fontWeight: '700', color: '#ffffff'},
+  absentLbl: {fontSize: 9, fontWeight: '600', color: '#9ca3af'},
+  absentLblOn: {color: '#4b5563'},
   submitBar: {
     padding: 14, backgroundColor: '#ffffff',
     borderTopWidth: 1, borderTopColor: '#ece5d3',

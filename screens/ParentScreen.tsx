@@ -23,6 +23,9 @@ import {
 import {getSchoolCode} from '../config';
 const TABS = ['Overview', 'Attendance', 'Homework', 'Timetable', 'Fee', 'Results', 'Notifications'];
 
+// Absent entries render neutral grey — never the red of a failing grade.
+const ABSENT_COLOR = '#9ca3af';
+
 export default function ParentScreen({navigation}: any) {
   const [tab, setTab] = useState('Overview');
   const [parent, setParent] = useState<any>(null);
@@ -494,16 +497,23 @@ export default function ParentScreen({navigation}: any) {
                     }}>
                       <Text style={{fontSize: 13, color: '#374151', fontWeight: '500'}}>{subj}</Text>
                       <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                        <Text style={{fontSize: 13, fontWeight: '600', color: '#0d1f3c'}}>
-                          {r.subjects[subj].obtained}/{r.subjects[subj].total}
+                        <Text style={{
+                          fontSize: 13, fontWeight: '600',
+                          color: r.subjects[subj].isAbsent ? ABSENT_COLOR : '#0d1f3c',
+                        }}>
+                          {r.subjects[subj].isAbsent
+                            ? 'Absent'
+                            : `${r.subjects[subj].obtained}/${r.subjects[subj].total}`}
                         </Text>
                         <View style={{
-                          backgroundColor: r.subjects[subj].grade === 'A+' ? '#f0fdf4' :
+                          backgroundColor: r.subjects[subj].isAbsent ? '#f3f4f6' :
+                            r.subjects[subj].grade === 'A+' ? '#f0fdf4' :
                             r.subjects[subj].grade === 'F' ? '#fef2f2' : '#fdf8ee',
                           borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
                         }}>
                           <Text style={{fontSize: 11, fontWeight: '700',
-                            color: r.subjects[subj].grade === 'A+' ? '#16a34a' :
+                            color: r.subjects[subj].isAbsent ? ABSENT_COLOR :
+                              r.subjects[subj].grade === 'A+' ? '#16a34a' :
                               r.subjects[subj].grade === 'F' ? '#ef4444' : '#C9A84C',
                           }}>{r.subjects[subj].grade}</Text>
                         </View>
@@ -518,12 +528,18 @@ export default function ParentScreen({navigation}: any) {
                   }}>
                     <Text style={{fontSize: 14, fontWeight: '700', color: '#0d1f3c'}}>Total</Text>
                     <View style={{alignItems: 'flex-end'}}>
-                      <Text style={{fontSize: 16, fontWeight: '700', color: '#C9A84C'}}>
-                        {r.totalObtained}/{r.totalMarks}
+                      <Text style={{
+                        fontSize: 16, fontWeight: '700',
+                        color: r.isAbsent ? ABSENT_COLOR : '#C9A84C',
+                      }}>
+                        {r.isAbsent ? 'Absent' : `${r.totalObtained}/${r.totalMarks}`}
                       </Text>
-                      <Text style={{fontSize: 12, color: '#6b7280'}}>{r.percentage}% · Grade {r.grade}</Text>
+                      <Text style={{fontSize: 12, color: '#6b7280'}}>
+                        {r.isAbsent ? 'Absent for all tests' : `${r.percentage}% · Grade ${r.grade}`}
+                      </Text>
                     </View>
                   </View>
+                  {r.note ? <Text style={styles.absentNote}>{r.note}</Text> : null}
                 </View>
               ))
             )}
@@ -626,6 +642,10 @@ const styles = StyleSheet.create({
   attStat: {fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '500'},
   emptyBox: {alignItems: 'center', paddingVertical: 40},
   emptyTxt: {fontSize: 14, color: '#9ca3af', fontWeight: '500'},
+  absentNote: {
+    fontSize: 11, color: '#9ca3af', fontStyle: 'italic',
+    marginTop: 6, marginBottom: 2,
+  },
   attRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#ffffff', borderRadius: 10, padding: 12,
