@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Share from 'react-native-share';
 import RNFS from 'react-native-fs';
+import {captureRef} from 'react-native-view-shot';
 import {
   ClipboardDocumentCheckIcon,
   CheckCircleIcon,
@@ -360,6 +361,8 @@ export default function TeacherScreen({navigation}: any) {
   const [loadingProgStudents, setLoadingProgStudents] = useState(false);
   const [progStudent, setProgStudent] = useState<any>(null);
   const [showClassReport, setShowClassReport] = useState(false);
+  const [sharingReport, setSharingReport] = useState(false);
+  const reportRef = useRef<any>(null);
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
 
@@ -809,6 +812,38 @@ QUANTAIP EduOS`;
     };
   };
 
+  // Export the report as a PNG and hand it to the share sheet.
+  // snapshotContentContainer captures the ScrollView's full content rather than
+  // the visible viewport, so every student is in the image however long the
+  // class is. Deliberately image-based — react-native-html-to-pdf is the
+  // library that caused the "Uri.getScheme() on null" crash and stays out.
+  const shareClassReport = async () => {
+    if (sharingReport) return;
+    setSharingReport(true);
+    try {
+      const uri = await captureRef(reportRef, {
+        format: 'png',
+        quality: 0.9,
+        snapshotContentContainer: true,
+      });
+
+      await Share.open({
+        url: uri.startsWith('file://') ? uri : `file://${uri}`,
+        type: 'image/png',
+        title: `Class Report - ${progClass} - ${progSubject}`,
+        failOnCancel: false,
+      });
+    } catch (e: any) {
+      const msg = String(e?.message || '');
+      if (!msg.includes('User did not share') && !msg.includes('cancel')) {
+        console.log('❌ QUANTAIP Error:', e);
+        Alert.alert('Error', 'Could not share report.');
+      }
+    } finally {
+      setSharingReport(false);
+    }
+  };
+
   const saveNote = async () => {
     if (!progStudent || !progSubject) return;
     setSavingNote(true);
@@ -1197,9 +1232,11 @@ QUANTAIP EduOS`;
       )}
 
       {/* ── PROGRESS TAB ── */}
-      {tab === 'Progress' && (
+      {/* Selection + individual views. The class report renders separately
+          below so its ScrollView can be captured as an image. */}
+      {tab === 'Progress' && !(showClassReport && !progStudent) && (
         <ScrollView style={styles.content}>
-          {!progStudent && !showClassReport ? (
+          {!progStudent ? (
             <View>
               <Text style={styles.sectionTitle}>Student Progress</Text>
 
@@ -1296,101 +1333,6 @@ QUANTAIP EduOS`;
               ) : null}
               <View style={{height: 40}} />
             </View>
-          ) : !progStudent && showClassReport ? (
-            /* ── Class progress report — ranked list for the whole class ── */
-            (() => {
-              const rep = buildClassReport();
-              const medal = (i: number) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '');
-
-              return (
-                <View>
-                  <View style={styles.stepHeader}>
-                    <TouchableOpacity onPress={() => setShowClassReport(false)}>
-                      <Text style={styles.backLink}>← Back</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.sectionTitle}>Class Report</Text>
-                  </View>
-
-                  <View style={styles.reportHeader}>
-                    <Text style={styles.reportTitle}>{progClass} — {progSubject}</Text>
-                    <Text style={styles.reportSub}>
-                      {rep.ranked.length} student(s) ranked · {rep.totalTests} test(s) · {today}
-                    </Text>
-                  </View>
-
-                  {/* Class summary */}
-                  <View style={styles.repSummaryCard}>
-                    <View style={styles.repSummaryTopRow}>
-                      <Text style={styles.repSummaryAvgVal}>{rep.classAvg}%</Text>
-                      <Text style={styles.repSummaryAvgLbl}>CLASS AVERAGE</Text>
-                    </View>
-                    {[
-                      {label: 'Highest', row: rep.highest, suffix: rep.highest ? `${rep.highest.avg}%` : ''},
-                      {label: 'Lowest', row: rep.lowest, suffix: rep.lowest ? `${rep.lowest.avg}%` : ''},
-                      {label: 'Most Improved', row: rep.mostImproved, suffix: '📈'},
-                      {label: 'Needs Attention', row: rep.needsAttention, suffix: '⚠️'},
-                    ].map((item, i) => (
-                      <View key={i} style={styles.repSummaryRow}>
-                        <Text style={styles.repSummaryLbl}>{item.label}</Text>
-                        <Text style={styles.repSummaryVal}>
-                          {item.row ? `${item.row.name} — ${item.suffix}` : '—'}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  {/* Ranked list */}
-                  {rep.ranked.length === 0 ? (
-                    <View style={styles.progEmpty}>
-                      <ChartBarIcon size={34} color="#b8a88a" />
-                      <Text style={styles.progEmptyTxt}>
-                        No test data recorded for {progSubject} yet.
-                      </Text>
-                    </View>
-                  ) : (
-                    rep.ranked.map((r, i) => (
-                      <TouchableOpacity
-                        key={i}
-                        style={styles.rankRow}
-                        onPress={() => openProgStudent(r.student)}>
-                        <Text style={[styles.rankNum, i < 3 && styles.rankNumTop]}>
-                          {medal(i) ? `${medal(i)} ` : ''}{i + 1}.
-                        </Text>
-                        <View style={styles.rankInfo}>
-                          <Text style={styles.rankName}>{r.name}</Text>
-                          <Text style={styles.rankMeta}>
-                            Roll No: {r.rollNo} · {r.taken}/{rep.totalTests} tests
-                          </Text>
-                        </View>
-                        <View style={styles.rankRight}>
-                          <Text style={styles.rankPct}>{r.avg}%</Text>
-                          {r.trendIcon ? <Text style={styles.rankTrend}>{r.trendIcon}</Text> : null}
-                        </View>
-                      </TouchableOpacity>
-                    ))
-                  )}
-
-                  {/* Students with nothing recorded — listed, never ranked */}
-                  {rep.noData.length > 0 && (
-                    <View style={{marginTop: 16}}>
-                      <Text style={styles.fieldLabel}>NO TEST DATA YET ({rep.noData.length})</Text>
-                      {rep.noData.map((r, i) => (
-                        <TouchableOpacity
-                          key={i}
-                          style={styles.noDataRow}
-                          onPress={() => openProgStudent(r.student)}>
-                          <Text style={styles.noDataName}>{r.name}</Text>
-                          <Text style={styles.noDataMeta}>Roll No: {r.rollNo}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-
-                  <Text style={styles.reportFooter}>Generated by QUANTAIP EduOS</Text>
-                  <View style={{height: 40}} />
-                </View>
-              );
-            })()
           ) : (
             /* ── Single student's progress view ── */
             (() => {
@@ -1510,6 +1452,123 @@ QUANTAIP EduOS`;
             })()
           )}
         </ScrollView>
+      )}
+
+      {/* ── CLASS PROGRESS REPORT ──
+          Its own screen so the ScrollView itself can be the capture target:
+          captureRef with snapshotContentContainer grabs the whole scrollable
+          content, not just the visible viewport, so a 30-student class exports
+          in full. The Back/Share bar sits outside the ScrollView and so stays
+          out of the image. */}
+      {tab === 'Progress' && showClassReport && !progStudent && (
+        <View style={{flex: 1}}>
+          <View style={styles.reportBar}>
+            <TouchableOpacity onPress={() => setShowClassReport(false)}>
+              <Text style={styles.backLink}>← Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.shareReportBtn}
+              onPress={shareClassReport}
+              disabled={sharingReport}>
+              {sharingReport ? <ActivityIndicator size="small" color="#C9A84C" /> :
+                <Text style={styles.shareReportTxt}>📤 Share Report</Text>}
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView ref={reportRef} style={styles.content} collapsable={false}>
+            {(() => {
+              const rep = buildClassReport();
+              const medal = (i: number) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '');
+
+              return (
+                <View style={styles.reportCapture} collapsable={false}>
+                  {/* Header — kept inside the capture so a shared image is
+                      self-explanatory on its own. */}
+                  <View style={styles.reportHeader}>
+                    <Text style={styles.reportTitle}>{progClass} — {progSubject}</Text>
+                    <Text style={styles.reportSub}>
+                      Class Progress Report · {schoolName || getSchoolCode()} · {today}
+                    </Text>
+                    <Text style={styles.reportSub}>
+                      {rep.ranked.length} student(s) ranked · {rep.totalTests} test(s)
+                    </Text>
+                  </View>
+
+                  {/* Class summary */}
+                  <View style={styles.repSummaryCard}>
+                    <View style={styles.repSummaryTopRow}>
+                      <Text style={styles.repSummaryAvgVal}>{rep.classAvg}%</Text>
+                      <Text style={styles.repSummaryAvgLbl}>CLASS AVERAGE</Text>
+                    </View>
+                    {[
+                      {label: 'Highest', row: rep.highest, suffix: rep.highest ? `${rep.highest.avg}%` : ''},
+                      {label: 'Lowest', row: rep.lowest, suffix: rep.lowest ? `${rep.lowest.avg}%` : ''},
+                      {label: 'Most Improved', row: rep.mostImproved, suffix: '📈'},
+                      {label: 'Needs Attention', row: rep.needsAttention, suffix: '⚠️'},
+                    ].map((item, i) => (
+                      <View key={i} style={styles.repSummaryRow}>
+                        <Text style={styles.repSummaryLbl}>{item.label}</Text>
+                        <Text style={styles.repSummaryVal}>
+                          {item.row ? `${item.row.name} — ${item.suffix}` : '—'}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Ranked list */}
+                  {rep.ranked.length === 0 ? (
+                    <View style={styles.progEmpty}>
+                      <ChartBarIcon size={34} color="#b8a88a" />
+                      <Text style={styles.progEmptyTxt}>
+                        No test data recorded for {progSubject} yet.
+                      </Text>
+                    </View>
+                  ) : (
+                    rep.ranked.map((r, i) => (
+                      <TouchableOpacity
+                        key={i}
+                        style={styles.rankRow}
+                        onPress={() => openProgStudent(r.student)}>
+                        <Text style={[styles.rankNum, i < 3 && styles.rankNumTop]}>
+                          {medal(i) ? `${medal(i)} ` : ''}{i + 1}.
+                        </Text>
+                        <View style={styles.rankInfo}>
+                          <Text style={styles.rankName}>{r.name}</Text>
+                          <Text style={styles.rankMeta}>
+                            Roll No: {r.rollNo} · {r.taken}/{rep.totalTests} tests
+                          </Text>
+                        </View>
+                        <View style={styles.rankRight}>
+                          <Text style={styles.rankPct}>{r.avg}%</Text>
+                          {r.trendIcon ? <Text style={styles.rankTrend}>{r.trendIcon}</Text> : null}
+                        </View>
+                      </TouchableOpacity>
+                    ))
+                  )}
+
+                  {/* Students with nothing recorded — listed, never ranked */}
+                  {rep.noData.length > 0 && (
+                    <View style={{marginTop: 16}}>
+                      <Text style={styles.fieldLabel}>NO TEST DATA YET ({rep.noData.length})</Text>
+                      {rep.noData.map((r, i) => (
+                        <TouchableOpacity
+                          key={i}
+                          style={styles.noDataRow}
+                          onPress={() => openProgStudent(r.student)}>
+                          <Text style={styles.noDataName}>{r.name}</Text>
+                          <Text style={styles.noDataMeta}>Roll No: {r.rollNo}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+
+                  <Text style={styles.reportFooter}>Generated by QUANTAIP EduOS</Text>
+                </View>
+              );
+            })()}
+            <View style={{height: 40}} />
+          </ScrollView>
+        </View>
       )}
 
       {/* ── MY CLASSES TAB ── */}
@@ -2132,6 +2191,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#0d1f3c', borderRadius: 12, padding: 13, marginBottom: 16,
   },
   classReportBtnTxt: {color: '#C9A84C', fontSize: 14, fontWeight: '700'},
+  reportBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#ece5d3',
+  },
+  shareReportBtn: {
+    backgroundColor: '#0d1f3c', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 9, minWidth: 130, alignItems: 'center',
+  },
+  shareReportTxt: {color: '#C9A84C', fontSize: 13, fontWeight: '700'},
+  // Solid background so the captured PNG never comes out transparent.
+  reportCapture: {backgroundColor: '#faf8f2', paddingTop: 4},
   reportHeader: {
     backgroundColor: '#0d1f3c', borderRadius: 14,
     paddingHorizontal: 16, paddingVertical: 14, marginBottom: 12,
