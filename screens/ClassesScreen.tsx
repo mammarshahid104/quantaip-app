@@ -22,15 +22,13 @@ import {
 
 import {getSchoolCode} from '../config';
 import {theme} from '../theme';
-
-const CLASS_HIERARCHY = [
-  {category: 'Early Education', classes: ['Nursery', 'Prep', 'KG']},
-  {category: 'Primary', classes: ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5']},
-  {category: 'Middle', classes: ['Grade 6', 'Grade 7', 'Grade 8']},
-  {category: 'Secondary', classes: ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']},
-];
+import {useClasses} from '../services/classes';
 
 export default function ClassesScreen() {
+  // Class list comes from schools/{code}/classes — never a hardcoded hierarchy.
+  const {classes: classList, loading: classesLoading, empty: noClasses, reload: reloadClasses} =
+    useClasses();
+
   const [selectedClass, setSelectedClass] = useState('');
   const [sections, setSections] = useState<string[]>([]);
   const [newSection, setNewSection] = useState('');
@@ -39,6 +37,10 @@ export default function ClassesScreen() {
   const [classInchargeName, setClassInchargeName] = useState('');
   const [teachers, setTeachers] = useState<any[]>([]);
   const [teacherModal, setTeacherModal] = useState(false);
+  const [addModal, setAddModal] = useState(false);
+  const [newClassName, setNewClassName] = useState('');
+  const [newClassSection, setNewClassSection] = useState('A');
+  const [savingClass, setSavingClass] = useState(false);
 
   useEffect(() => {
     loadTeachers();
@@ -78,6 +80,53 @@ export default function ClassesScreen() {
     }
   };
 
+  // Create a class document. Field shape mirrors quantaip-web's AddClassModal
+  // exactly (name, section, sections[], classIncharge, classInchargeName) so
+  // both apps read and write the same structure.
+  const addClass = async () => {
+    const name = newClassName.trim();
+    if (!name) {
+      Alert.alert('Error', 'Please enter a class name.');
+      return;
+    }
+    // Firestore doc IDs can't contain "/".
+    if (name.includes('/')) {
+      Alert.alert('Error', 'Class name cannot contain a "/" character.');
+      return;
+    }
+    if (classList.some(c => c.toLowerCase() === name.toLowerCase())) {
+      Alert.alert('Error', `Class "${name}" already exists.`);
+      return;
+    }
+
+    setSavingClass(true);
+    try {
+      const section = newClassSection.trim();
+      await firestore()
+        .collection('schools').doc(getSchoolCode())
+        .collection('classes').doc(name)
+        .set({
+          name,
+          section,
+          sections: section ? [section] : [],
+          classIncharge: '',
+          classInchargeName: '',
+          createdAt: firestore.FieldValue.serverTimestamp(),
+          updatedAt: firestore.FieldValue.serverTimestamp(),
+        }, {merge: true});
+
+      await reloadClasses();
+      setAddModal(false);
+      setNewClassName('');
+      setNewClassSection('A');
+      Alert.alert('Done ✅', `Class "${name}" added successfully!`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSavingClass(false);
+    }
+  };
+
   const addSection = async () => {
     if (!newSection.trim()) return;
     if (sections.includes(newSection.trim())) {
@@ -91,7 +140,11 @@ export default function ClassesScreen() {
         .collection('schools').doc(getSchoolCode())
         .collection('classes').doc(selectedClass)
         .set(
-          {sections: updated, updatedAt: firestore.FieldValue.serverTimestamp()},
+          {
+            name: selectedClass,
+            sections: updated,
+            updatedAt: firestore.FieldValue.serverTimestamp(),
+          },
           {merge: true},
         );
       setSections(updated);
@@ -128,6 +181,7 @@ export default function ClassesScreen() {
         .collection('schools').doc(getSchoolCode())
         .collection('classes').doc(selectedClass)
         .set({
+          name: selectedClass,
           classIncharge: teacher.id,
           classInchargeName: teacher.name,
           updatedAt: firestore.FieldValue.serverTimestamp(),
@@ -201,31 +255,95 @@ export default function ClassesScreen() {
         </View>
       </Modal>
 
-      {/* CLASS LIST */}
-      {CLASS_HIERARCHY.map((cat, i) => (
-        <View key={i} style={styles.categoryBlock}>
-          <Text style={styles.catTitle}>{cat.category}</Text>
-          <View style={styles.classGrid}>
-            {cat.classes.map((cls, j) => (
-              <TouchableOpacity
-                key={j}
-                style={[styles.classCard, selectedClass === cls && styles.classCardOn]}
-                onPress={() => loadSections(cls)}>
-                <BuildingLibraryIcon
-                  size={14}
-                  color={selectedClass === cls ? '#B8960A' : '#9ca3af'}
-                />
-                <Text style={[
-                  styles.classCardTxt,
-                  selectedClass === cls && styles.classCardTxtOn,
-                ]}>
-                  {cls}
-                </Text>
+      {/* ADD CLASS MODAL */}
+      <Modal visible={addModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add New Class</Text>
+              <TouchableOpacity onPress={() => setAddModal(false)}>
+                <XMarkIcon size={22} color="#6b7280" />
               </TouchableOpacity>
-            ))}
+            </View>
+            <Text style={styles.modalSub}>Classes you add here appear in every class picker</Text>
+
+            <Text style={styles.fieldLabel}>CLASS NAME *</Text>
+            <TextInput
+              style={styles.sectionInput}
+              placeholder="e.g. Grade 8, Nursery, KG"
+              placeholderTextColor="#b8a88a"
+              value={newClassName}
+              onChangeText={setNewClassName}
+              autoCapitalize="words"
+            />
+
+            <Text style={[styles.fieldLabel, {marginTop: 12}]}>SECTION</Text>
+            <TextInput
+              style={styles.sectionInput}
+              placeholder="e.g. A"
+              placeholderTextColor="#b8a88a"
+              value={newClassSection}
+              onChangeText={setNewClassSection}
+              autoCapitalize="characters"
+            />
+
+            <TouchableOpacity
+              style={[styles.assignBtn, {marginTop: 16}]}
+              onPress={addClass}
+              disabled={savingClass}>
+              {savingClass ? (
+                <ActivityIndicator color="#C9A84C" />
+              ) : (
+                <>
+                  <PlusCircleIcon size={16} color="#C9A84C" />
+                  <Text style={styles.assignBtnTxt}>Save Class</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
-      ))}
+      </Modal>
+
+      {/* CLASS LIST — live from schools/{code}/classes */}
+      <View style={styles.listHeader}>
+        <Text style={styles.catTitle}>Classes ({classList.length})</Text>
+        <TouchableOpacity style={styles.newClassBtn} onPress={() => setAddModal(true)}>
+          <PlusCircleIcon size={16} color="#ffffff" />
+          <Text style={styles.newClassBtnTxt}>Add Class</Text>
+        </TouchableOpacity>
+      </View>
+
+      {classesLoading ? (
+        <ActivityIndicator color="#B8960A" style={{marginVertical: 20}} />
+      ) : noClasses ? (
+        <View style={styles.hintBox}>
+          <BuildingLibraryIcon size={32} color="#b8a88a" />
+          <Text style={styles.hintTxt}>
+            No classes found. Please add classes first from the web dashboard or
+            tap "Add Class" above.
+          </Text>
+        </View>
+      ) : (
+        <View style={[styles.classGrid, {marginBottom: 18}]}>
+          {classList.map((cls, j) => (
+            <TouchableOpacity
+              key={j}
+              style={[styles.classCard, selectedClass === cls && styles.classCardOn]}
+              onPress={() => loadSections(cls)}>
+              <BuildingLibraryIcon
+                size={14}
+                color={selectedClass === cls ? '#B8960A' : '#9ca3af'}
+              />
+              <Text style={[
+                styles.classCardTxt,
+                selectedClass === cls && styles.classCardTxtOn,
+              ]}>
+                {cls}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* CLASS DETAIL */}
       {selectedClass ? (
@@ -302,12 +420,12 @@ export default function ClassesScreen() {
             </View>
           </View>
         </View>
-      ) : (
+      ) : !noClasses && !classesLoading ? (
         <View style={styles.hintBox}>
           <BuildingLibraryIcon size={32} color="#b8a88a" />
           <Text style={styles.hintTxt}>Select a class to manage</Text>
         </View>
-      )}
+      ) : null}
 
       <View style={{height: 30}} />
     </ScrollView>
@@ -316,7 +434,20 @@ export default function ClassesScreen() {
 
 const styles = StyleSheet.create({
   root: {flex: 1, paddingHorizontal: 14, paddingTop: 14},
-  categoryBlock: {marginBottom: 18},
+  listHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 10,
+  },
+  newClassBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#B8960A', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 8,
+  },
+  newClassBtnTxt: {color: '#ffffff', fontSize: 12, fontWeight: '700'},
+  fieldLabel: {
+    fontSize: 11, fontWeight: '700', color: '#6b7280',
+    letterSpacing: 0.8, marginBottom: 6,
+  },
   catTitle: {
     fontSize: 13, fontWeight: '700', color: '#6b7280',
     letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8,

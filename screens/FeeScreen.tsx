@@ -23,13 +23,7 @@ import {
 
 import {getSchoolCode} from '../config';
 import {theme} from '../theme';
-
-const CLASS_HIERARCHY = [
-  {category: 'Early Education', classes: ['Nursery', 'Prep', 'KG']},
-  {category: 'Primary', classes: ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5']},
-  {category: 'Middle', classes: ['Grade 6', 'Grade 7', 'Grade 8']},
-  {category: 'Secondary', classes: ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']},
-];
+import {useClasses, NO_CLASSES_MESSAGE} from '../services/classes';
 
 const FEE_TYPES = [
   {key: 'standard', label: 'Standard'},
@@ -54,6 +48,9 @@ const calculateFee = (student: any, standardFee: number): number => {
 };
 
 export default function FeeScreen() {
+  // Class list is live from schools/{code}/classes — never a hardcoded list.
+  const {classes: classList, loading: classesLoading, empty: noClasses} = useClasses();
+
   const [activeTab, setActiveTab] = useState('Students');
   const [loading, setLoading] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
@@ -429,7 +426,7 @@ export default function FeeScreen() {
                   </TouchableOpacity>
                 ))}
                 <View style={styles.filterDivider} />
-                {['All', ...CLASS_HIERARCHY.flatMap(c => c.classes)].map(cls => (
+                {['All', ...classList].map(cls => (
                   <TouchableOpacity key={cls}
                     style={[styles.filterChip, selectedClass === cls && styles.filterChipOn]}
                     onPress={() => setSelectedClass(cls)}>
@@ -516,10 +513,15 @@ export default function FeeScreen() {
           <View>
             <Text style={styles.sectionTitle}>Set Monthly Fee</Text>
             <Text style={styles.sectionSub}>Set standard fee per class. Individual discounts can be set per student.</Text>
-            {CLASS_HIERARCHY.map((cat, i) => (
-              <View key={i} style={styles.card}>
-                <Text style={styles.catTitle}>{cat.category}</Text>
-                {cat.classes.map((cls, j) => (
+            {classesLoading ? (
+              <ActivityIndicator color="#B8960A" style={{marginVertical: 20}} />
+            ) : noClasses ? (
+              <View style={styles.card}>
+                <Text style={styles.noClassTxt}>{NO_CLASSES_MESSAGE}</Text>
+              </View>
+            ) : (
+              <View style={styles.card}>
+                {classList.map((cls, j) => (
                   <View key={j} style={styles.feeRow}>
                     <Text style={styles.className}>{cls}</Text>
                     {feeStructure[cls] > 0 && (
@@ -544,7 +546,7 @@ export default function FeeScreen() {
                   </View>
                 ))}
               </View>
-            ))}
+            )}
           </View>
         )}
 
@@ -582,7 +584,7 @@ export default function FeeScreen() {
             </View>
 
             <Text style={[styles.sectionTitle, {marginTop: 16}]}>By Class</Text>
-            {CLASS_HIERARCHY.flatMap(c => c.classes).map((cls, i) => {
+            {classList.map((cls, i) => {
               const clsStudents = students.filter(s => s.class === cls);
               if (clsStudents.length === 0) return null;
               const clsPaid = clsStudents.filter(s => s.feeStatus === 'paid').length;
@@ -657,6 +659,7 @@ const styles = StyleSheet.create({
   sectionSub: {fontSize: 12, color: '#9ca3af', marginBottom: 14},
   card: {backgroundColor: '#ffffff', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#ece5d3'},
   catTitle: {fontSize: 14, fontWeight: '700', color: '#0d1f3c', marginBottom: 10},
+  noClassTxt: {fontSize: 13, color: '#B8960A', fontWeight: '500', lineHeight: 19},
   feeRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6'},
   className: {fontSize: 13, fontWeight: '500', color: '#374151', flex: 1},
   currentFee: {fontSize: 11, color: '#B8960A', fontWeight: '600', marginRight: 8},

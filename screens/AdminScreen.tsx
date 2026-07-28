@@ -57,15 +57,14 @@ import FeeScreen from './FeeScreen';
 
 import {getSchoolCode} from '../config';
 import {theme} from '../theme';
-
-const CLASS_HIERARCHY = [
-  {category: 'Early Education', classes: ['Nursery', 'Prep', 'KG']},
-  {category: 'Primary', classes: ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5']},
-  {category: 'Middle', classes: ['Grade 6', 'Grade 7', 'Grade 8']},
-  {category: 'Secondary', classes: ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']},
-];
-
-const ALL_CLASSES = CLASS_HIERARCHY.flatMap(c => c.classes);
+import {useClasses, classSort, matchClass, NO_CLASSES_MESSAGE} from '../services/classes';
+import {
+  STUDENT_COLUMNS,
+  TEACHER_COLUMNS,
+  STUDENT_EXAMPLE_ROW,
+  TEACHER_EXAMPLE_ROW,
+  pickCol,
+} from '../services/excelTemplates';
 
 const generateId = (role: string, index: number): string => {
   const roleCode: any = {teacher: 'TCH', student: 'STU', parent: 'PAR'};
@@ -78,6 +77,14 @@ const generatePass = (name: string): string => {
   const num = Math.floor(Math.random() * 9000) + 1000;
   return `${first}${num}`;
 };
+
+// Shown wherever a class picker would otherwise render an empty row.
+const NoClassesNotice = () => (
+  <View style={styles.noClassBox}>
+    <BuildingLibraryIcon size={22} color="#b8a88a" />
+    <Text style={styles.noClassTxt}>{NO_CLASSES_MESSAGE}</Text>
+  </View>
+);
 
 const TABS = [
   {key: 'Dashboard', icon: HomeIcon},
@@ -160,10 +167,21 @@ const makeDefaultWeek = () => {
 };
 
 export default function AdminScreen({navigation}: any) {
+  // Every class picker below is driven by schools/{code}/classes — no hardcoded
+  // Nursery…Grade 12 list, so schools with custom class names work correctly.
+  const {
+    classes: classList,
+    loading: classesLoading,
+    empty: noClasses,
+  } = useClasses();
+
   const [tab, setTab] = useState('Dashboard');
   const [loading, setLoading] = useState(false);
   const [selectedClass, setSelectedClass] = useState('');
   const [importProgress, setImportProgress] = useState('');
+  // Parsed + validated rows awaiting confirmation. Nothing is written until the
+  // admin taps Import in the preview modal.
+  const [importPreview, setImportPreview] = useState<any>(null);
   const [stats, setStats] = useState({students: 0, teachers: 0, fee: '0'});
 
   // Student list
@@ -688,6 +706,107 @@ export default function AdminScreen({navigation}: any) {
     } finally {setLoading(false);}
   };
 
+  // ============ EXCEL IMPORT ============
+  // Templates are the simplified flat sheets shared with quantaip-web:
+  //   Students → Full Name | Class | Section | Roll No. | Father Name | Parents Phone
+  //   Teachers → Full Name | Subject | Class Assigned | Phone No.
+  // Every "Class" value is checked against schools/{code}/classes. Rows naming
+  // an unknown class are flagged and skipped — they never block the import.
+
+  // Sheet named "Teachers" holds teachers; every other sheet holds students.
+  // Legacy files used one sheet per class, so a missing "Class" column falls
+  // back to the sheet name.
+  const parseWorkbook = (workbook: any) => {
+    const students: any[] = [];
+    const teachers: any[] = [];
+
+    for (const sheetName of workbook.SheetNames) {
+      const data: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+      if (data.length === 0) continue;
+      const isTeacherSheet = sheetName.toLowerCase().includes('teacher');
+
+      data.forEach((r: any, i: number) => {
+        const rowNo = i + 2; // +1 for the header row, +1 for 1-based numbering
+        if (isTeacherSheet) {
+          teachers.push({
+            rowNo,
+            name: pickCol(r, 'Full Name', 'Name', 'name'),
+            subject: pickCol(r, 'Subject', 'subject'),
+            phone: pickCol(r, 'Phone No.', 'Phone No', 'Phone', 'phone'),
+            classesAssigned: pickCol(r, 'Class Assigned', 'Classes Assigned')
+              .split(',').map((c: string) => c.trim()).filter(Boolean),
+          });
+        } else {
+          students.push({
+            rowNo,
+            name: pickCol(r, 'Full Name', 'Name', 'name'),
+            cls:
+              pickCol(r, 'Class', 'class') ||
+              (sheetName.toLowerCase() === 'students' ? '' : sheetName),
+            section: pickCol(r, 'Section', 'section') || 'A',
+            rollNo: pickCol(r, 'Roll No.', 'Roll No', 'Roll Number'),
+            fatherName: pickCol(r, 'Father Name', 'Fathers Name'),
+            parentPhone: pickCol(r, 'Parents Phone', 'Parent Phone', 'Phone'),
+          });
+        }
+      });
+    }
+    return {students, teachers};
+  };
+
+  // Resolve each row's class against the school's classes and collect warnings.
+  // Students with an unknown class are skipped; teachers keep the classes that
+  // do exist and are imported either way.
+  const validateRows = (parsed: {students: any[]; teachers: any[]}) => {
+    const warnings: string[] = [];
+    let skipped = 0;
+
+    const students = parsed.students.map(r => {
+      if (!r.name) {
+        skipped++;
+        warnings.push(`⚠️ Student row ${r.rowNo}: no name — skipped`);
+        return {...r, skip: true};
+      }
+      if (!r.cls) {
+        skipped++;
+        warnings.push(`⚠️ Student row ${r.rowNo}: no class given — skipped`);
+        return {...r, skip: true};
+      }
+      const match = matchClass(classList, r.cls);
+      if (!match) {
+        skipped++;
+        warnings.push(
+          `⚠️ Student row ${r.rowNo}: Class "${r.cls}" not found — add it first or fix the sheet`,
+        );
+        return {...r, skip: true};
+      }
+      return {...r, cls: match, skip: false};
+    });
+
+    const teachers = parsed.teachers.map(r => {
+      if (!r.name) {
+        skipped++;
+        warnings.push(`⚠️ Teacher row ${r.rowNo}: no name — skipped`);
+        return {...r, skip: true};
+      }
+      const resolved: string[] = [];
+      const unknown: string[] = [];
+      r.classesAssigned.forEach((c: string) => {
+        const match = matchClass(classList, c);
+        if (match) resolved.push(match);
+        else unknown.push(c);
+      });
+      if (unknown.length) {
+        warnings.push(
+          `⚠️ Teacher row ${r.rowNo}: Class ${unknown.map(c => `"${c}"`).join(', ')} not found — not assigned`,
+        );
+      }
+      return {...r, classesAssigned: resolved, skip: false};
+    });
+
+    return {students, teachers, warnings, skipped};
+  };
+
   const importFromExcel = async () => {
     try {
       setImportProgress('Opening file picker...');
@@ -701,87 +820,111 @@ export default function AdminScreen({navigation}: any) {
       const arrayBuffer = await response.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, {type: 'array'});
 
-      let totalSuccess = 0;
-      let totalError = 0;
+      const checked = validateRows(parseWorkbook(workbook));
+      setImportProgress('');
 
-      for (const sheetName of workbook.SheetNames) {
-        const sheet = workbook.Sheets[sheetName];
-        const data: any[] = XLSX.utils.sheet_to_json(sheet);
-        if (data.length === 0) continue;
+      if (checked.students.length === 0 && checked.teachers.length === 0) {
+        Alert.alert('Nothing to Import', 'No rows found in this file.');
+        return;
+      }
+      // Nothing is written yet — the preview is the confirmation step.
+      setImportPreview(checked);
+    } catch (e: any) {
+      setImportProgress('');
+      if (e?.code !== 'OPERATION_CANCELED') Alert.alert('Error', e.message);
+    }
+  };
 
-        setImportProgress(`Importing ${sheetName}... (${data.length} rows)`);
-        const isTeacher = sheetName.toLowerCase().includes('teacher');
-        const collection = isTeacher ? 'teachers' : 'students';
+  const runImport = async () => {
+    if (!importPreview) return;
+    const validStudents = importPreview.students.filter((r: any) => !r.skip);
+    const validTeachers = importPreview.teachers.filter((r: any) => !r.skip);
+    setImportPreview(null);
 
+    let totalSuccess = 0;
+    let totalError = 0;
+
+    try {
+      if (validTeachers.length) {
         const snapshot = await firestore()
           .collection('schools').doc(getSchoolCode())
-          .collection(collection).get();
-
+          .collection('teachers').get();
         let currentIndex = snapshot.size;
 
-        for (const row of data) {
+        for (const r of validTeachers) {
           try {
             currentIndex++;
-            const name = row['Name'] || row['name'] || '';
-            if (!name) continue;
-            const defaultPass = generatePass(name);
-
-            if (isTeacher) {
-              const teacherId = generateId('teacher', currentIndex);
-              await firestore()
-                .collection('schools').doc(getSchoolCode())
-                .collection('teachers').doc(teacherId)
-                .set({
-                  id: teacherId, name,
-                  subject: row['Subject'] || '',
-                  phone: row['Phone'] || '',
-                  classesAssigned: (row['Classes Assigned'] || '').split(',').map((c: string) => c.trim()).filter(Boolean),
-                  password: defaultPass, role: 'teacher',
-                  school: getSchoolCode(),
-                  createdAt: firestore.FieldValue.serverTimestamp(),
-                });
-              await createAuthAccount(
-                `${teacherId.toLowerCase()}@quantaip.edu.pk`, defaultPass);
-            } else {
-              const studentId = generateId('student', currentIndex);
-              const parentId = generateId('parent', currentIndex);
-              const parentPass = generatePass(name + ' Parent');
-
-              await firestore()
-                .collection('schools').doc(getSchoolCode())
-                .collection('students').doc(studentId)
-                .set({
-                  id: studentId, fullName: name,
-                  fatherName: row['Father Name'] || '',
-                  class: sheetName,
-                  section: row['Section'] || 'A',
-                  rollNo: row['Roll No'] || '',
-                  parentPhone: row['Parent Phone'] || '',
-                  parentId, password: defaultPass,
-                  role: 'student', school: getSchoolCode(),
-                  status: 'active',
-                  createdAt: firestore.FieldValue.serverTimestamp(),
-                });
-
-              await firestore()
-                .collection('schools').doc(getSchoolCode())
-                .collection('parents').doc(parentId)
-                .set({
-                  id: parentId, studentId, studentName: name,
-                  phone: row['Parent Phone'] || '',
-                  password: parentPass, role: 'parent',
-                  school: getSchoolCode(),
-                  createdAt: firestore.FieldValue.serverTimestamp(),
-                });
-
-              await createAuthAccount(
-                `${studentId.toLowerCase()}@quantaip.edu.pk`, defaultPass);
-              await createAuthAccount(
-                `${parentId.toLowerCase()}@quantaip.edu.pk`, parentPass);
-            }
+            const teacherId = generateId('teacher', currentIndex);
+            const defaultPass = generatePass(r.name);
+            await firestore()
+              .collection('schools').doc(getSchoolCode())
+              .collection('teachers').doc(teacherId)
+              .set({
+                id: teacherId, name: r.name,
+                subject: r.subject,
+                phone: r.phone,
+                classesAssigned: r.classesAssigned,
+                password: defaultPass, role: 'teacher',
+                school: getSchoolCode(),
+                status: 'active',
+                createdAt: firestore.FieldValue.serverTimestamp(),
+              });
+            await createAuthAccount(
+              `${teacherId.toLowerCase()}@quantaip.edu.pk`, defaultPass);
             totalSuccess++;
             setImportProgress(`Importing... ${totalSuccess} done`);
-          } catch (e) {totalError++;}
+          } catch {totalError++;}
+        }
+      }
+
+      if (validStudents.length) {
+        const snapshot = await firestore()
+          .collection('schools').doc(getSchoolCode())
+          .collection('students').get();
+        let currentIndex = snapshot.size;
+
+        for (const r of validStudents) {
+          try {
+            currentIndex++;
+            const studentId = generateId('student', currentIndex);
+            const parentId = generateId('parent', currentIndex);
+            const defaultPass = generatePass(r.name);
+            const parentPass = generatePass(r.name + ' Parent');
+
+            await firestore()
+              .collection('schools').doc(getSchoolCode())
+              .collection('students').doc(studentId)
+              .set({
+                id: studentId, fullName: r.name,
+                fatherName: r.fatherName,
+                class: r.cls,
+                section: r.section || 'A',
+                rollNo: r.rollNo,
+                parentPhone: r.parentPhone,
+                parentId, password: defaultPass,
+                role: 'student', school: getSchoolCode(),
+                status: 'active',
+                createdAt: firestore.FieldValue.serverTimestamp(),
+              });
+
+            await firestore()
+              .collection('schools').doc(getSchoolCode())
+              .collection('parents').doc(parentId)
+              .set({
+                id: parentId, studentId, studentName: r.name,
+                phone: r.parentPhone,
+                password: parentPass, role: 'parent',
+                school: getSchoolCode(),
+                createdAt: firestore.FieldValue.serverTimestamp(),
+              });
+
+            await createAuthAccount(
+              `${studentId.toLowerCase()}@quantaip.edu.pk`, defaultPass);
+            await createAuthAccount(
+              `${parentId.toLowerCase()}@quantaip.edu.pk`, parentPass);
+            totalSuccess++;
+            setImportProgress(`Importing... ${totalSuccess} done`);
+          } catch {totalError++;}
         }
       }
 
@@ -790,7 +933,7 @@ export default function AdminScreen({navigation}: any) {
       loadStats();
     } catch (e: any) {
       setImportProgress('');
-      if (e?.code !== 'OPERATION_CANCELED') Alert.alert('Error', e.message);
+      Alert.alert('Error', e.message);
     }
   };
 
@@ -799,21 +942,20 @@ export default function AdminScreen({navigation}: any) {
       const RNBlobUtil = require('react-native-blob-util').default;
       const wb = XLSX.utils.book_new();
 
+      // Column order must stay identical to quantaip-web's templates so sheets
+      // move between the two apps without editing.
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-        ['Name', 'Subject', 'Phone', 'Classes Assigned'],
-        ['Mr. Qaiser', 'Mathematics', '0300-1234567', 'Grade 9, Grade 10'],
+        STUDENT_COLUMNS,
+        STUDENT_EXAMPLE_ROW,
+      ]), 'Students');
+
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        TEACHER_COLUMNS,
+        TEACHER_EXAMPLE_ROW,
       ]), 'Teachers');
 
-      const classData = [
-        ['Name', 'Father Name', 'Section', 'Roll No', 'Parent Phone'],
-        ['Ayesha Khan', 'Mr. Khan', 'A', '001', '0300-1234567'],
-      ];
-      CLASS_HIERARCHY.flatMap(c => c.classes).forEach(cls => {
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(classData), cls);
-      });
-
       const wbout = XLSX.write(wb, {type: 'base64', bookType: 'xlsx'});
-      const path = `${RNBlobUtil.fs.dirs.CacheDir}/QUANTAIP_Template.xlsx`;
+      const path = `${RNBlobUtil.fs.dirs.CacheDir}/QUANTAIP_Import_Template.xlsx`;
       await RNBlobUtil.fs.writeFile(path, wbout, 'base64');
       await RNBlobUtil.android.actionViewIntent(path,
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -827,13 +969,21 @@ export default function AdminScreen({navigation}: any) {
     (s.id || '').toLowerCase().includes(studentSearch.toLowerCase())
   );
 
-  const groupedStudents = CLASS_HIERARCHY.map(cat => ({
-    category: cat.category,
-    classes: cat.classes.map(cls => ({
-      className: cls,
-      students: filteredStudents.filter(s => s.class === cls),
-    })).filter(c => c.students.length > 0),
-  })).filter(cat => cat.classes.length > 0);
+  // One collapsible block per class, ordered by the school's class list. Any
+  // class still present on a student doc but missing from schools/{code}/classes
+  // is appended so no student silently disappears from this list.
+  const groupedStudents = (() => {
+    const extras = filteredStudents
+      .map(s => String(s.class || '').trim())
+      .filter(c => c && !classList.some(k => k.toLowerCase() === c.toLowerCase()));
+    const names = [...classList, ...Array.from(new Set(extras)).sort(classSort)];
+    return names
+      .map(cls => ({
+        className: cls,
+        students: filteredStudents.filter(s => s.class === cls),
+      }))
+      .filter(c => c.students.length > 0);
+  })();
 
   return (
     <View style={styles.root}>
@@ -914,6 +1064,84 @@ export default function AdminScreen({navigation}: any) {
         </View>
       </Modal>
 
+      {/* IMPORT PREVIEW MODAL — confirmation step before anything is written */}
+      <Modal visible={!!importPreview} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, {maxHeight: '85%'}]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Preview Import</Text>
+              <TouchableOpacity onPress={() => setImportPreview(null)}>
+                <XMarkIcon size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            {(() => {
+              const okStudents = (importPreview?.students || []).filter((r: any) => !r.skip);
+              const okTeachers = (importPreview?.teachers || []).filter((r: any) => !r.skip);
+              const warnings: string[] = importPreview?.warnings || [];
+              const total = okStudents.length + okTeachers.length;
+              return (
+                <>
+                  <Text style={styles.modalSub}>
+                    {okStudents.length} students · {okTeachers.length} teachers ready
+                    {importPreview?.skipped ? ` · ${importPreview.skipped} row(s) will be skipped` : ''}
+                  </Text>
+
+                  <ScrollView style={{maxHeight: 320}}>
+                    {warnings.length > 0 && (
+                      <View style={styles.warnBox}>
+                        {warnings.slice(0, 10).map((w, i) => (
+                          <Text key={i} style={styles.warnTxt}>{w}</Text>
+                        ))}
+                        {warnings.length > 10 && (
+                          <Text style={styles.warnTxt}>…and {warnings.length - 10} more.</Text>
+                        )}
+                      </View>
+                    )}
+
+                    {okStudents.slice(0, 5).map((r: any, i: number) => (
+                      <View key={`s${i}`} style={styles.previewRow}>
+                        <Text style={styles.previewName}>{r.name}</Text>
+                        <Text style={styles.previewMeta}>
+                          {r.cls} · {r.section} · Roll {r.rollNo || '—'}
+                        </Text>
+                      </View>
+                    ))}
+                    {okTeachers.slice(0, 5).map((r: any, i: number) => (
+                      <View key={`t${i}`} style={styles.previewRow}>
+                        <Text style={styles.previewName}>{r.name}</Text>
+                        <Text style={styles.previewMeta}>
+                          {r.subject || '—'} · {r.classesAssigned.join(', ') || 'no classes'}
+                        </Text>
+                      </View>
+                    ))}
+                    {total > 10 && (
+                      <Text style={styles.previewMore}>…and {total - 10} more rows.</Text>
+                    )}
+                  </ScrollView>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.modalCloseBtn,
+                      {backgroundColor: '#16a34a', marginTop: 12, marginBottom: 8},
+                      total === 0 && styles.addBtnDisabled,
+                    ]}
+                    disabled={total === 0}
+                    onPress={runImport}>
+                    <Text style={[styles.modalCloseTxt, {color: '#ffffff'}]}>
+                      {total === 0 ? 'Nothing to import' : `Import ${total} record(s)`}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setImportPreview(null)}>
+                    <Text style={styles.modalCloseTxt}>Cancel</Text>
+                  </TouchableOpacity>
+                </>
+              );
+            })()}
+          </View>
+        </View>
+      </Modal>
+
       {/* EDIT CLASSES MODAL */}
       <Modal visible={!!editClassesModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -927,25 +1155,24 @@ export default function AdminScreen({navigation}: any) {
             <Text style={styles.modalSub}>{editClassesModal?.name}</Text>
 
             <ScrollView style={{maxHeight: 350}}>
-              {CLASS_HIERARCHY.map((cat, ci) => (
-                <View key={ci} style={{marginBottom: 12}}>
-                  <Text style={styles.classCatTitle}>{cat.category}</Text>
-                  <View style={styles.classChipGrid}>
-                    {cat.classes.map((cls, cj) => {
-                      const isSelected = (editClassesModal?.classesAssigned || []).includes(cls);
-                      return (
-                        <TouchableOpacity key={cj}
-                          style={[styles.classChip, isSelected && styles.classChipOn]}
-                          onPress={() => toggleClassForTeacher(cls)}>
-                          <Text style={[styles.classChipTxt, isSelected && styles.classChipTxtOn]}>
-                            {cls}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+              {noClasses ? (
+                <NoClassesNotice />
+              ) : (
+                <View style={styles.classChipGrid}>
+                  {classList.map((cls, cj) => {
+                    const isSelected = (editClassesModal?.classesAssigned || []).includes(cls);
+                    return (
+                      <TouchableOpacity key={cj}
+                        style={[styles.classChip, isSelected && styles.classChipOn]}
+                        onPress={() => toggleClassForTeacher(cls)}>
+                        <Text style={[styles.classChipTxt, isSelected && styles.classChipTxtOn]}>
+                          {cls}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
-              ))}
+              )}
             </ScrollView>
 
             <View style={styles.selectedCount}>
@@ -1050,27 +1277,24 @@ export default function AdminScreen({navigation}: any) {
                     <Text style={styles.emptyTxt}>No students found</Text>
                   </View>
                 ) : (
-                  groupedStudents.map((cat, ci) => (
+                  groupedStudents.map((cls, ci) => (
                     <View key={ci} style={styles.categoryBlock}>
                       <TouchableOpacity
                         style={styles.categoryHeader}
-                        onPress={() => toggleCategory(cat.category)}>
-                        <Text style={styles.categoryTitle}>{cat.category}</Text>
+                        onPress={() => toggleCategory(cls.className)}>
+                        <Text style={styles.categoryTitle}>{cls.className}</Text>
                         <View style={styles.categoryRight}>
                           <Text style={styles.categoryCount}>
-                            {cat.classes.reduce((sum, c) => sum + c.students.length, 0)} students
+                            {cls.students.length} students
                           </Text>
-                          {expandedCategories.includes(cat.category)
+                          {expandedCategories.includes(cls.className)
                             ? <ChevronDownIcon size={16} color="#B8960A" />
                             : <ChevronRightIcon size={16} color="#B8960A" />}
                         </View>
                       </TouchableOpacity>
 
-                      {expandedCategories.includes(cat.category) && cat.classes.map((cls, cli) => (
-                        <View key={cli} style={styles.classBlock}>
-                          <Text style={styles.classBlockTitle}>
-                            {cls.className} ({cls.students.length})
-                          </Text>
+                      {expandedCategories.includes(cls.className) && (
+                        <View style={styles.classBlock}>
                           {cls.students.map((s, si) => (
                             <TouchableOpacity key={si}
                               style={styles.studentCard}
@@ -1106,7 +1330,7 @@ export default function AdminScreen({navigation}: any) {
                             </TouchableOpacity>
                           ))}
                         </View>
-                      ))}
+                      )}
                     </View>
                   ))
                 )}
@@ -1116,15 +1340,19 @@ export default function AdminScreen({navigation}: any) {
             {studentTab === 'Add New' && (
               <View>
                 <Text style={styles.fieldLabel}>SELECT CLASS *</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
-                  {CLASS_HIERARCHY.flatMap(c => c.classes).map((cls, i) => (
-                    <TouchableOpacity key={i}
-                      style={[styles.clsChip, selectedClass === cls && styles.clsChipOn]}
-                      onPress={() => setSelectedClass(cls)}>
-                      <Text style={[styles.clsChipTxt, selectedClass === cls && styles.clsChipTxtOn]}>{cls}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                {noClasses ? (
+                  <NoClassesNotice />
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
+                    {classList.map((cls, i) => (
+                      <TouchableOpacity key={i}
+                        style={[styles.clsChip, selectedClass === cls && styles.clsChipOn]}
+                        onPress={() => setSelectedClass(cls)}>
+                        <Text style={[styles.clsChipTxt, selectedClass === cls && styles.clsChipTxtOn]}>{cls}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
                 <View style={styles.card}>
                   {[
                     {label: 'FULL NAME *', value: sName, setter: setSName, placeholder: 'e.g. Ayesha Khan'},
@@ -1291,15 +1519,19 @@ export default function AdminScreen({navigation}: any) {
 
     {/* Class */}
     <Text style={styles.fieldLabel}>CLASS</Text>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 16}}>
-      {CLASS_HIERARCHY.flatMap(c => c.classes).map((cls, i) => (
-        <TouchableOpacity key={i}
-          style={[styles.clsChip, resultClass === cls && styles.clsChipOn]}
-          onPress={() => setResultClass(cls)}>
-          <Text style={[styles.clsChipTxt, resultClass === cls && styles.clsChipTxtOn]}>{cls}</Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+    {noClasses ? (
+      <NoClassesNotice />
+    ) : (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 16}}>
+        {classList.map((cls, i) => (
+          <TouchableOpacity key={i}
+            style={[styles.clsChip, resultClass === cls && styles.clsChipOn]}
+            onPress={() => setResultClass(cls)}>
+            <Text style={[styles.clsChipTxt, resultClass === cls && styles.clsChipTxtOn]}>{cls}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    )}
 
     <TouchableOpacity
       style={[styles.addBtn, (!resultTestType || !resultClass) && styles.addBtnDisabled]}
@@ -1386,15 +1618,19 @@ export default function AdminScreen({navigation}: any) {
 
             {/* Class selector */}
             <Text style={styles.fieldLabel}>SELECT CLASS</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
-              {ALL_CLASSES.map((cls, i) => (
-                <TouchableOpacity key={i}
-                  style={[styles.clsChip, ttClass === cls && styles.clsChipOn]}
-                  onPress={() => loadTimetable(cls)}>
-                  <Text style={[styles.clsChipTxt, ttClass === cls && styles.clsChipTxtOn]}>{cls}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            {noClasses ? (
+              <NoClassesNotice />
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
+                {classList.map((cls, i) => (
+                  <TouchableOpacity key={i}
+                    style={[styles.clsChip, ttClass === cls && styles.clsChipOn]}
+                    onPress={() => loadTimetable(cls)}>
+                    <Text style={[styles.clsChipTxt, ttClass === cls && styles.clsChipTxtOn]}>{cls}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
 
             {loadingTT && <ActivityIndicator color="#B8960A" style={{marginVertical: 20}} />}
 
@@ -1523,7 +1759,7 @@ export default function AdminScreen({navigation}: any) {
             ? Math.round(((totalPresent + totalLate) / grandTotal) * 100) : 0;
 
           // Class-wise breakdown
-          const classStats = ALL_CLASSES.map(cls => {
+          const classStats = classList.map(cls => {
             const clsStudents = studentsWithData.filter(s => s.class === cls);
             if (clsStudents.length === 0) return null;
             let p = 0, a = 0, l = 0;
@@ -1727,13 +1963,22 @@ export default function AdminScreen({navigation}: any) {
             <View style={styles.card}>
               <Text style={styles.importTitle}>Bulk Import</Text>
               <Text style={styles.importDesc}>
-                Upload Excel file. Each sheet = one class. "Teachers" sheet = teachers.
+                Upload an Excel file. Same format as the web dashboard — a
+                "Students" sheet and/or a "Teachers" sheet.
               </Text>
               <View style={styles.excelFormat}>
                 <Text style={styles.excelFormatTitle}>Excel Sheet Structure:</Text>
-                <Text style={styles.excelCol}>• Sheet "Teachers": Name, Subject, Phone, Classes Assigned</Text>
-                <Text style={styles.excelCol}>• Sheet "Grade 9": Name, Father Name, Section, Roll No, Parent Phone</Text>
+                <Text style={styles.excelCol}>• Sheet "Students": {STUDENT_COLUMNS.join(', ')}</Text>
+                <Text style={styles.excelCol}>• Sheet "Teachers": {TEACHER_COLUMNS.join(', ')}</Text>
+                <Text style={styles.excelCol}>• "Class Assigned" is comma-separated.</Text>
               </View>
+              {classesLoading ? null : noClasses ? (
+                <NoClassesNotice />
+              ) : (
+                <Text style={styles.excelCol}>
+                  Valid classes: {classList.join(', ')}
+                </Text>
+              )}
               {importProgress ? (
                 <View style={styles.progressBox}>
                   <ActivityIndicator size="small" color="#16a34a" style={{marginRight: 8}} />
@@ -1824,6 +2069,23 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#ece5d3', marginBottom: 12,
   },
   searchInput: {flex: 1, fontSize: 14, color: '#0d1f3c'},
+  warnBox: {
+    backgroundColor: '#fffbeb', borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: '#fde68a', marginBottom: 12, gap: 6,
+  },
+  warnTxt: {fontSize: 12, color: '#92400e', fontWeight: '500', lineHeight: 17},
+  previewRow: {
+    paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+  },
+  previewName: {fontSize: 13, fontWeight: '600', color: '#0d1f3c'},
+  previewMeta: {fontSize: 11, color: '#9ca3af', marginTop: 2},
+  previewMore: {fontSize: 12, color: '#9ca3af', fontStyle: 'italic', marginTop: 8},
+  noClassBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#fdf8ee', borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 12,
+  },
+  noClassTxt: {flex: 1, fontSize: 12, color: '#B8960A', fontWeight: '500', lineHeight: 17},
   emptyBox: {alignItems: 'center', paddingVertical: 40, gap: 10},
   emptyTxt: {fontSize: 14, color: '#9ca3af', fontWeight: '500'},
   categoryBlock: {marginBottom: 8},

@@ -963,6 +963,11 @@ QUANTAIP EduOS`;
           <Text style={styles.sectionTitle}>Assign Homework</Text>
 
           {/* Class selector — only assigned classes */}
+          {classes.length === 0 && (
+            <Text style={styles.noClassTxt}>
+              No classes assigned to you yet. Ask your admin to assign classes.
+            </Text>
+          )}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
             {classes.map((cls, i) => (
               <TouchableOpacity key={i}
@@ -1090,6 +1095,11 @@ QUANTAIP EduOS`;
           <Text style={styles.sectionTitle}>Class Timetable</Text>
 
           {/* Class selector — only assigned classes */}
+          {classes.length === 0 && (
+            <Text style={styles.noClassTxt}>
+              No classes assigned to you yet. Ask your admin to assign classes.
+            </Text>
+          )}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 12}}>
             {classes.map((cls, i) => (
               <TouchableOpacity key={i}
@@ -1449,6 +1459,10 @@ const styles = StyleSheet.create({
   bottomTabTxtOn: {color: '#B8960A', fontWeight: '700'},
   content: {flex: 1, paddingHorizontal: 14, paddingTop: 14},
   sectionTitle: {fontSize: 17, fontWeight: '700', color: '#0d1f3c', marginBottom: 12},
+  noClassTxt: {
+    fontSize: 13, color: '#B8960A', fontWeight: '500',
+    lineHeight: 19, marginBottom: 12,
+  },
   stepHeader: {flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12},
   emptyBox: {alignItems: 'center', paddingVertical: 40, gap: 10},
   emptyTxt: {fontSize: 15, fontWeight: '600', color: '#6b7280'},
