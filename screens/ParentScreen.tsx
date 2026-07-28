@@ -21,6 +21,7 @@ import {
 } from 'react-native-heroicons/outline';
 
 import {getSchoolCode} from '../config';
+import {noteMetaLine, subjectsWithNotes} from '../services/notes';
 const TABS = ['Overview', 'Attendance', 'Homework', 'Timetable', 'Fee', 'Results', 'Notifications'];
 
 // Absent entries render neutral grey — never the red of a failing grade.
@@ -459,6 +460,17 @@ export default function ParentScreen({navigation}: any) {
               </View>
             </View>
 
+            {/* Read-only notes left by each subject teacher */}
+            {subjectsWithNotes(student?.teacherNotes).map((subject, i) => (
+              <View key={i} style={styles.noteCard}>
+                <Text style={styles.noteTitle}>📝 Teacher's Note — {subject}</Text>
+                <Text style={styles.noteBody}>{student.teacherNotes[subject].note}</Text>
+                <Text style={styles.noteMeta}>
+                  {noteMetaLine(student.teacherNotes[subject])}
+                </Text>
+              </View>
+            ))}
+
             {loadingResults ? (
               <ActivityIndicator color="#C9A84C" size="large" style={{marginTop: 20}} />
             ) : results.length === 0 ? (
@@ -646,6 +658,13 @@ const styles = StyleSheet.create({
     fontSize: 11, color: '#9ca3af', fontStyle: 'italic',
     marginTop: 6, marginBottom: 2,
   },
+  noteCard: {
+    backgroundColor: '#fdf8ee', borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 12,
+  },
+  noteTitle: {fontSize: 12, fontWeight: '700', color: '#B8960A', marginBottom: 6},
+  noteBody: {fontSize: 13, color: '#374151', lineHeight: 19},
+  noteMeta: {fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginTop: 6},
   attRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#ffffff', borderRadius: 10, padding: 12,

@@ -351,6 +351,17 @@ export default function TeacherScreen({navigation}: any) {
   const [loadingMarks, setLoadingMarks] = useState(false);
   const [submittingMarks, setSubmittingMarks] = useState(false);
 
+  // Progress states — class → subject → student → chart + teacher's note
+  const [progClass, setProgClass] = useState('');
+  const [progSubject, setProgSubject] = useState('');
+  const [progSubjects, setProgSubjects] = useState<string[]>([]);
+  const [loadingProgSubjects, setLoadingProgSubjects] = useState(false);
+  const [progStudents, setProgStudents] = useState<any[]>([]);
+  const [loadingProgStudents, setLoadingProgStudents] = useState(false);
+  const [progStudent, setProgStudent] = useState<any>(null);
+  const [noteText, setNoteText] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+
   const today = new Date().toLocaleDateString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
   });
@@ -642,6 +653,124 @@ QUANTAIP EduOS`;
     }
   };
 
+  // ── PROGRESS ──
+  // Subjects come from the class doc's subjects[] (the same array the web
+  // dashboard's Manage Subjects writes). A class with none defined yet falls
+  // back to whatever this teacher teaches.
+  const loadProgSubjects = async (cls: string) => {
+    setProgClass(cls);
+    setProgSubject('');
+    setProgStudents([]);
+    setProgStudent(null);
+    setLoadingProgSubjects(true);
+    try {
+      const doc = await firestore()
+        .collection('schools').doc(getSchoolCode())
+        .collection('classes').doc(cls)
+        .get();
+      const defined: string[] = (doc.data()?.subjects || [])
+        .map((s: any) => String(s?.subject || '').trim())
+        .filter(Boolean);
+      const fallback = String(teacher?.subject || '')
+        .split(',').map((s: string) => s.trim()).filter(Boolean);
+      const list = defined.length > 0 ? defined : fallback;
+      setProgSubjects(Array.from(new Set(list)));
+    } catch (e) {
+      console.log('❌ QUANTAIP Error:', e);
+      setProgSubjects([]);
+    } finally {
+      setLoadingProgSubjects(false);
+    }
+  };
+
+  // Student docs already carry marksMap and teacherNotes, so opening a student
+  // needs no further reads.
+  const loadProgStudents = async (subject: string) => {
+    setProgSubject(subject);
+    setProgStudent(null);
+    setLoadingProgStudents(true);
+    try {
+      const snapshot = await firestore()
+        .collection('schools').doc(getSchoolCode())
+        .collection('students')
+        .where('class', '==', progClass)
+        .get();
+      setProgStudents(snapshot.docs.map(d => d.data()));
+    } catch (e) {
+      console.log('❌ QUANTAIP Error:', e);
+      setProgStudents([]);
+    } finally {
+      setLoadingProgStudents(false);
+    }
+  };
+
+  const openProgStudent = (s: any) => {
+    setProgStudent(s);
+    setNoteText(s?.teacherNotes?.[progSubject]?.note || '');
+  };
+
+  // Chronological test history for one student in one subject. Absent tests are
+  // left out entirely — plotting them as 0 would invent a score.
+  const progressData = (student: any, subject: string) => {
+    const entries = Object.values(student?.marksMap || {})
+      .filter((m: any) => m.subject === subject && !m.isAbsent)
+      .sort((a: any, b: any) => String(a.date || '').localeCompare(String(b.date || ''))) as any[];
+
+    const pcts = entries.map(m => m.percentage || 0);
+    const high = pcts.length ? Math.max(...pcts) : 0;
+    const low = pcts.length ? Math.min(...pcts) : 0;
+    const avg = pcts.length
+      ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
+      : 0;
+
+    // Trend compares the average of the earlier half against the later half.
+    let trend = '';
+    if (pcts.length >= 2) {
+      const mid = Math.floor(pcts.length / 2);
+      const firstHalf = pcts.slice(0, mid);
+      const secondHalf = pcts.slice(mid);
+      const avgOf = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
+      const diff = avgOf(secondHalf) - avgOf(firstHalf);
+      trend = diff > 5 ? '📈 Improving' : diff < -5 ? '📉 Declining' : '➡️ Steady';
+    }
+
+    const absentCount = Object.values(student?.marksMap || {})
+      .filter((m: any) => m.subject === subject && m.isAbsent).length;
+
+    return {entries, high, low, avg, trend, absentCount};
+  };
+
+  const saveNote = async () => {
+    if (!progStudent || !progSubject) return;
+    setSavingNote(true);
+    try {
+      const entry = {
+        note: noteText.trim(),
+        updatedBy: teacher?.name || teacher?.id || '',
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
+      // merge:true deep-merges maps, so other subjects' notes survive.
+      await firestore()
+        .collection('schools').doc(getSchoolCode())
+        .collection('students').doc(progStudent.id)
+        .set({teacherNotes: {[progSubject]: entry}}, {merge: true});
+
+      // Reflect it locally without a re-read (updatedAt shows as "just now").
+      const localEntry = {...entry, updatedAt: new Date()};
+      const updated = {
+        ...progStudent,
+        teacherNotes: {...(progStudent.teacherNotes || {}), [progSubject]: localEntry},
+      };
+      setProgStudent(updated);
+      setProgStudents(prev => prev.map(s => (s.id === updated.id ? updated : s)));
+      Alert.alert('Note Saved ✅', `Note saved for ${progStudent.fullName || progStudent.name}.`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
   const present = Object.values(attendance).filter(v => v === 'P').length;
   const absent = Object.values(attendance).filter(v => v === 'A').length;
   const late = Object.values(attendance).filter(v => v === 'L').length;
@@ -650,6 +779,7 @@ QUANTAIP EduOS`;
   const TABS = [
     ...(inchargeClasses.length > 0 ? [{key: 'Attendance', icon: ClipboardDocumentCheckIcon}] : []),
     {key: 'Marks', icon: PencilSquareIcon},
+    {key: 'Progress', icon: ChartBarIcon},
     {key: 'Homework', icon: ClipboardDocumentListIcon},
     {key: 'Timetable', icon: CalendarDaysIcon},
     {key: 'My Classes', icon: BookOpenIcon},
@@ -993,6 +1123,220 @@ QUANTAIP EduOS`;
                 </TouchableOpacity>
               )}
             </View>
+          )}
+        </ScrollView>
+      )}
+
+      {/* ── PROGRESS TAB ── */}
+      {tab === 'Progress' && (
+        <ScrollView style={styles.content}>
+          {!progStudent ? (
+            <View>
+              <Text style={styles.sectionTitle}>Student Progress</Text>
+
+              {/* Step 1 — class */}
+              <Text style={styles.fieldLabel}>CLASS</Text>
+              {classes.length === 0 ? (
+                <Text style={styles.noClassTxt}>
+                  No classes assigned to you yet. Ask your admin to assign classes.
+                </Text>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 14}}>
+                  {classes.map((cls, i) => (
+                    <TouchableOpacity key={i}
+                      style={[styles.progChip, progClass === cls && styles.progChipOn]}
+                      onPress={() => loadProgSubjects(cls)}>
+                      <Text style={[styles.progChipTxt, progClass === cls && styles.progChipTxtOn]}>
+                        {cls}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Step 2 — subject */}
+              {progClass ? (
+                loadingProgSubjects ? (
+                  <ActivityIndicator color="#B8960A" style={{marginVertical: 16}} />
+                ) : progSubjects.length === 0 ? (
+                  <Text style={styles.noClassTxt}>
+                    No subjects defined for {progClass}. Add them from the web dashboard's
+                    Manage Subjects screen.
+                  </Text>
+                ) : (
+                  <>
+                    <Text style={styles.fieldLabel}>SUBJECT</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 14}}>
+                      {progSubjects.map((sub, i) => (
+                        <TouchableOpacity key={i}
+                          style={[styles.progChip, progSubject === sub && styles.progChipOn]}
+                          onPress={() => loadProgStudents(sub)}>
+                          <Text style={[styles.progChipTxt, progSubject === sub && styles.progChipTxtOn]}>
+                            {sub}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </>
+                )
+              ) : null}
+
+              {/* Step 3 — student list */}
+              {progSubject ? (
+                loadingProgStudents ? (
+                  <ActivityIndicator color="#B8960A" size="large" style={{marginTop: 20}} />
+                ) : progStudents.length === 0 ? (
+                  <Text style={styles.noClassTxt}>No students found in {progClass}.</Text>
+                ) : (
+                  <>
+                    <Text style={styles.fieldLabel}>
+                      STUDENTS — {progClass} · {progSubject}
+                    </Text>
+                    {progStudents.map((s, i) => {
+                      const {entries, avg} = progressData(s, progSubject);
+                      const hasNote = !!s?.teacherNotes?.[progSubject]?.note;
+                      return (
+                        <TouchableOpacity key={i} style={styles.progRow} onPress={() => openProgStudent(s)}>
+                          <View style={styles.studentAv}>
+                            <Text style={styles.studentAvTxt}>
+                              {(s.fullName || s.name || '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                            </Text>
+                          </View>
+                          <View style={styles.studentInfo}>
+                            <Text style={styles.studentName}>{s.fullName || s.name}</Text>
+                            <Text style={styles.studentRoll}>
+                              {entries.length > 0
+                                ? `${entries.length} test(s) · avg ${avg}%`
+                                : 'No tests yet'}
+                              {hasNote ? ' · 📝' : ''}
+                            </Text>
+                          </View>
+                          <ChartBarIcon size={18} color="#B8960A" />
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </>
+                )
+              ) : null}
+              <View style={{height: 40}} />
+            </View>
+          ) : (
+            /* ── Single student's progress view ── */
+            (() => {
+              const {entries, high, low, avg, trend, absentCount} =
+                progressData(progStudent, progSubject);
+              const noteMeta = progStudent?.teacherNotes?.[progSubject];
+              const updatedAt = noteMeta?.updatedAt?.toDate
+                ? noteMeta.updatedAt.toDate()
+                : noteMeta?.updatedAt instanceof Date
+                  ? noteMeta.updatedAt
+                  : null;
+
+              return (
+                <View>
+                  <View style={styles.stepHeader}>
+                    <TouchableOpacity onPress={() => setProgStudent(null)}>
+                      <Text style={styles.backLink}>← Back</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.sectionTitle}>
+                      {progStudent.fullName || progStudent.name}
+                    </Text>
+                  </View>
+                  <View style={styles.testSummary}>
+                    <Text style={styles.testSummaryTxt}>
+                      {progClass} · {progSubject} · {entries.length} test(s)
+                      {absentCount > 0 ? ` · ${absentCount} absent` : ''}
+                    </Text>
+                  </View>
+
+                  {/* Bar chart — plain Views, heights proportional to percentage */}
+                  {entries.length === 0 ? (
+                    <View style={styles.progEmpty}>
+                      <ChartBarIcon size={34} color="#b8a88a" />
+                      <Text style={styles.progEmptyTxt}>
+                        No marks recorded for {progSubject} yet.
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.chartCard}>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        <View style={styles.chartRow}>
+                          {entries.map((m: any, i: number) => {
+                            const pct = m.percentage || 0;
+                            const col = pct >= 80 ? '#16a34a' : pct >= 60 ? '#B8960A'
+                              : pct >= 40 ? '#f59e0b' : '#ef4444';
+                            return (
+                              <View key={i} style={styles.chartCol}>
+                                <Text style={styles.chartPct}>{pct}%</Text>
+                                <View style={styles.chartTrack}>
+                                  <View style={[styles.chartBar, {
+                                    height: Math.max(4, (pct / 100) * 120),
+                                    backgroundColor: col,
+                                  }]} />
+                                </View>
+                                <Text style={styles.chartLbl} numberOfLines={2}>
+                                  {m.typeName || TEST_TYPES.find(t => t.key === m.testType)?.label || m.testType}
+                                </Text>
+                                <Text style={styles.chartDate}>{m.date}</Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {/* Summary stats */}
+                  {entries.length > 0 && (
+                    <View style={styles.statRow}>
+                      {[
+                        {label: 'Highest', value: `${high}%`, color: '#16a34a'},
+                        {label: 'Lowest', value: `${low}%`, color: '#ef4444'},
+                        {label: 'Average', value: `${avg}%`, color: '#B8960A'},
+                      ].map((st, i) => (
+                        <View key={i} style={styles.statBox}>
+                          <Text style={[styles.statVal, {color: st.color}]}>{st.value}</Text>
+                          <Text style={styles.statLbl}>{st.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  {trend ? (
+                    <View style={styles.trendBox}>
+                      <Text style={styles.trendTxt}>{trend}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Teacher's note for this subject */}
+                  <View style={styles.noteCard}>
+                    <Text style={styles.noteTitle}>📝 Teacher's Note — {progSubject}</Text>
+                    <TextInput
+                      style={styles.noteInput}
+                      placeholder="e.g. Needs to practice algebra problems more. Strong in geometry."
+                      placeholderTextColor="#b8a88a"
+                      value={noteText}
+                      onChangeText={setNoteText}
+                      multiline
+                      textAlignVertical="top"
+                    />
+                    {noteMeta?.note ? (
+                      <Text style={styles.noteMeta}>
+                        Last updated{updatedAt ? ` ${updatedAt.toLocaleDateString()}` : ''}
+                        {noteMeta.updatedBy ? ` by ${noteMeta.updatedBy}` : ''}
+                      </Text>
+                    ) : null}
+                    <TouchableOpacity
+                      style={styles.noteSaveBtn}
+                      onPress={saveNote}
+                      disabled={savingNote}>
+                      {savingNote ? <ActivityIndicator color="#C9A84C" /> :
+                        <Text style={styles.noteSaveTxt}>Save Note</Text>}
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{height: 40}} />
+                </View>
+              );
+            })()
           )}
         </ScrollView>
       )}
@@ -1544,6 +1888,73 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: '#ece5d3',
   },
   backLink: {fontSize: 13, color: '#B8960A', fontWeight: '600'},
+  // ── PROGRESS TAB ──
+  fieldLabel: {
+    fontSize: 11, fontWeight: '700', color: '#6b7280',
+    letterSpacing: 0.8, marginBottom: 8,
+  },
+  progChip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8,
+    backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#ece5d3',
+  },
+  progChipOn: {backgroundColor: '#0d1f3c', borderColor: '#0d1f3c'},
+  progChipTxt: {fontSize: 12, fontWeight: '600', color: '#6b7280'},
+  progChipTxtOn: {color: '#C9A84C'},
+  progRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#ffffff', borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 8,
+  },
+  progEmpty: {
+    alignItems: 'center', gap: 10, paddingVertical: 34,
+    backgroundColor: '#fdf8ee', borderRadius: 12,
+    borderWidth: 1, borderColor: '#ece5d3',
+  },
+  progEmptyTxt: {fontSize: 13, color: '#B8960A', fontWeight: '500', textAlign: 'center'},
+  chartCard: {
+    backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 12,
+  },
+  chartRow: {flexDirection: 'row', alignItems: 'flex-end', gap: 14},
+  chartCol: {alignItems: 'center', width: 62},
+  chartPct: {fontSize: 11, fontWeight: '700', color: '#0d1f3c', marginBottom: 4},
+  chartTrack: {
+    height: 120, width: 26, justifyContent: 'flex-end',
+    backgroundColor: '#faf8f2', borderRadius: 6, overflow: 'hidden',
+  },
+  chartBar: {width: '100%', borderRadius: 6},
+  chartLbl: {
+    fontSize: 10, fontWeight: '600', color: '#6b7280',
+    marginTop: 6, textAlign: 'center',
+  },
+  chartDate: {fontSize: 9, color: '#b8a88a', marginTop: 2},
+  statRow: {flexDirection: 'row', gap: 8, marginBottom: 12},
+  statBox: {
+    flex: 1, backgroundColor: '#ffffff', borderRadius: 12, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#ece5d3', alignItems: 'center',
+  },
+  statVal: {fontSize: 17, fontWeight: '700'},
+  statLbl: {fontSize: 10, color: '#9ca3af', fontWeight: '600', marginTop: 2},
+  trendBox: {
+    backgroundColor: '#fdf8ee', borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: '#ece5d3', alignItems: 'center', marginBottom: 12,
+  },
+  trendTxt: {fontSize: 14, fontWeight: '700', color: '#B8960A'},
+  noteCard: {
+    backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: '#ece5d3',
+  },
+  noteTitle: {fontSize: 14, fontWeight: '700', color: '#0d1f3c', marginBottom: 10},
+  noteInput: {
+    minHeight: 90, borderWidth: 1.5, borderColor: '#ece5d3', borderRadius: 10,
+    padding: 11, fontSize: 13, color: '#0d1f3c', backgroundColor: '#fdfcf8',
+  },
+  noteMeta: {fontSize: 11, color: '#9ca3af', fontStyle: 'italic', marginTop: 8},
+  noteSaveBtn: {
+    backgroundColor: '#0d1f3c', borderRadius: 10,
+    padding: 12, alignItems: 'center', marginTop: 12,
+  },
+  noteSaveTxt: {color: '#C9A84C', fontSize: 14, fontWeight: '700'},
   className: {fontSize: 16, fontWeight: '700', color: '#0d1f3c'},
   summaryRow: {
     flexDirection: 'row', gap: 8, padding: 12,

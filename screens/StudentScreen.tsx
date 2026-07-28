@@ -22,6 +22,7 @@ import {
 } from 'react-native-heroicons/outline';
 
 import {getSchoolCode} from '../config';
+import {noteMetaLine} from '../services/notes';
 const TABS = ['Overview', 'Attendance', 'Homework', 'Grades', 'Results', 'Timetable'];
 
 const TEST_TYPE_ORDER = ['weekly', 'monthly', 'midterm', 'sendup', 'final', 'classtest'];
@@ -412,6 +413,18 @@ export default function StudentScreen({navigation}: any) {
                           </View>
                         );
                       })}
+                    {/* Read-only note left by the subject teacher */}
+                    {student?.teacherNotes?.[subject]?.note ? (
+                      <View style={styles.noteCard}>
+                        <Text style={styles.noteTitle}>📝 Teacher's Note</Text>
+                        <Text style={styles.noteBody}>
+                          {student.teacherNotes[subject].note}
+                        </Text>
+                        <Text style={styles.noteMeta}>
+                          {noteMetaLine(student.teacherNotes[subject])}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                 );
               })
@@ -717,6 +730,13 @@ const styles = StyleSheet.create({
     fontSize: 11, color: '#9ca3af', fontStyle: 'italic',
     marginTop: 6, marginBottom: 2,
   },
+  noteCard: {
+    backgroundColor: '#fdf8ee', borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: '#ece5d3', marginTop: 10,
+  },
+  noteTitle: {fontSize: 12, fontWeight: '700', color: '#B8960A', marginBottom: 6},
+  noteBody: {fontSize: 13, color: '#374151', lineHeight: 19},
+  noteMeta: {fontSize: 10, color: '#9ca3af', fontStyle: 'italic', marginTop: 6},
   ttDay: {fontSize: 14, fontWeight: '600', color: '#6b7280', marginBottom: 10},
   ttCard: {
     flexDirection: 'row', backgroundColor: '#ffffff',
