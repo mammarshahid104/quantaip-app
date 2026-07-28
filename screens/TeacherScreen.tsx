@@ -359,6 +359,7 @@ export default function TeacherScreen({navigation}: any) {
   const [progStudents, setProgStudents] = useState<any[]>([]);
   const [loadingProgStudents, setLoadingProgStudents] = useState(false);
   const [progStudent, setProgStudent] = useState<any>(null);
+  const [showClassReport, setShowClassReport] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
 
@@ -662,6 +663,7 @@ QUANTAIP EduOS`;
     setProgSubject('');
     setProgStudents([]);
     setProgStudent(null);
+    setShowClassReport(false);
     setLoadingProgSubjects(true);
     try {
       const doc = await firestore()
@@ -688,6 +690,7 @@ QUANTAIP EduOS`;
   const loadProgStudents = async (subject: string) => {
     setProgSubject(subject);
     setProgStudent(null);
+    setShowClassReport(false);
     setLoadingProgStudents(true);
     try {
       const snapshot = await firestore()
@@ -724,20 +727,86 @@ QUANTAIP EduOS`;
       : 0;
 
     // Trend compares the average of the earlier half against the later half.
+    // trendDiff is kept numeric so the class report can rank by it.
     let trend = '';
+    let trendIcon = '';
+    let trendDiff = 0;
     if (pcts.length >= 2) {
       const mid = Math.floor(pcts.length / 2);
       const firstHalf = pcts.slice(0, mid);
       const secondHalf = pcts.slice(mid);
       const avgOf = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
-      const diff = avgOf(secondHalf) - avgOf(firstHalf);
-      trend = diff > 5 ? '📈 Improving' : diff < -5 ? '📉 Declining' : '➡️ Steady';
+      trendDiff = avgOf(secondHalf) - avgOf(firstHalf);
+      trend = trendDiff > 5 ? '📈 Improving' : trendDiff < -5 ? '📉 Declining' : '➡️ Steady';
+      trendIcon = trendDiff > 5 ? '📈' : trendDiff < -5 ? '📉' : '➡️';
     }
 
     const absentCount = Object.values(student?.marksMap || {})
       .filter((m: any) => m.subject === subject && m.isAbsent).length;
 
-    return {entries, high, low, avg, trend, absentCount};
+    return {entries, high, low, avg, trend, trendIcon, trendDiff, absentCount};
+  };
+
+  // ── CLASS PROGRESS REPORT ──
+  // Same per-student maths as the individual view, run across the whole class
+  // and ranked. Students with no recorded test are listed separately rather
+  // than ranked at 0%.
+  const buildClassReport = () => {
+    // Denominator for "4/5 tests" — every test the class sat in this subject.
+    const allTestIds = new Set<string>();
+    progStudents.forEach(s => {
+      Object.values(s?.marksMap || {}).forEach((m: any) => {
+        if (m.subject === progSubject && m.testId) allTestIds.add(m.testId);
+      });
+    });
+    const totalTests = allTestIds.size;
+
+    const rows = progStudents.map(s => {
+      const d = progressData(s, progSubject);
+      return {
+        student: s,
+        name: s.fullName || s.name || 'Unknown',
+        rollNo: s.rollNo || '—',
+        avg: d.avg,
+        taken: d.entries.length,
+        trend: d.trend,
+        trendIcon: d.trendIcon,
+        trendDiff: d.trendDiff,
+      };
+    });
+
+    const ranked = rows
+      .filter(r => r.taken > 0)
+      .sort((a, b) => b.avg - a.avg);
+    const noData = rows.filter(r => r.taken === 0);
+
+    const classAvg = ranked.length
+      ? Math.round(ranked.reduce((a, r) => a + r.avg, 0) / ranked.length)
+      : 0;
+
+    // Most improved / needs attention only mean something once a student has
+    // enough tests for a trend; otherwise fall back to the lowest average.
+    const withTrend = ranked.filter(r => r.trend);
+    const mostImproved = withTrend.length
+      ? withTrend.reduce((best, r) => (r.trendDiff > best.trendDiff ? r : best))
+      : null;
+    const worstTrend = withTrend.length
+      ? withTrend.reduce((worst, r) => (r.trendDiff < worst.trendDiff ? r : worst))
+      : null;
+    const needsAttention = worstTrend && worstTrend.trendDiff < -5
+      ? worstTrend
+      : ranked.length ? ranked[ranked.length - 1] : null;
+
+    return {
+      ranked,
+      noData,
+      totalTests,
+      classAvg,
+      highest: ranked.length ? ranked[0] : null,
+      lowest: ranked.length ? ranked[ranked.length - 1] : null,
+      mostImproved: mostImproved && mostImproved.trendDiff > 5 ? mostImproved : null,
+      needsAttention,
+    };
   };
 
   const saveNote = async () => {
@@ -1130,7 +1199,7 @@ QUANTAIP EduOS`;
       {/* ── PROGRESS TAB ── */}
       {tab === 'Progress' && (
         <ScrollView style={styles.content}>
-          {!progStudent ? (
+          {!progStudent && !showClassReport ? (
             <View>
               <Text style={styles.sectionTitle}>Student Progress</Text>
 
@@ -1189,6 +1258,13 @@ QUANTAIP EduOS`;
                   <Text style={styles.noClassTxt}>No students found in {progClass}.</Text>
                 ) : (
                   <>
+                    <TouchableOpacity
+                      style={styles.classReportBtn}
+                      onPress={() => setShowClassReport(true)}>
+                      <ChartBarIcon size={17} color="#C9A84C" />
+                      <Text style={styles.classReportBtnTxt}>View Class Report</Text>
+                    </TouchableOpacity>
+
                     <Text style={styles.fieldLabel}>
                       STUDENTS — {progClass} · {progSubject}
                     </Text>
@@ -1220,6 +1296,101 @@ QUANTAIP EduOS`;
               ) : null}
               <View style={{height: 40}} />
             </View>
+          ) : !progStudent && showClassReport ? (
+            /* ── Class progress report — ranked list for the whole class ── */
+            (() => {
+              const rep = buildClassReport();
+              const medal = (i: number) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '');
+
+              return (
+                <View>
+                  <View style={styles.stepHeader}>
+                    <TouchableOpacity onPress={() => setShowClassReport(false)}>
+                      <Text style={styles.backLink}>← Back</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.sectionTitle}>Class Report</Text>
+                  </View>
+
+                  <View style={styles.reportHeader}>
+                    <Text style={styles.reportTitle}>{progClass} — {progSubject}</Text>
+                    <Text style={styles.reportSub}>
+                      {rep.ranked.length} student(s) ranked · {rep.totalTests} test(s) · {today}
+                    </Text>
+                  </View>
+
+                  {/* Class summary */}
+                  <View style={styles.repSummaryCard}>
+                    <View style={styles.repSummaryTopRow}>
+                      <Text style={styles.repSummaryAvgVal}>{rep.classAvg}%</Text>
+                      <Text style={styles.repSummaryAvgLbl}>CLASS AVERAGE</Text>
+                    </View>
+                    {[
+                      {label: 'Highest', row: rep.highest, suffix: rep.highest ? `${rep.highest.avg}%` : ''},
+                      {label: 'Lowest', row: rep.lowest, suffix: rep.lowest ? `${rep.lowest.avg}%` : ''},
+                      {label: 'Most Improved', row: rep.mostImproved, suffix: '📈'},
+                      {label: 'Needs Attention', row: rep.needsAttention, suffix: '⚠️'},
+                    ].map((item, i) => (
+                      <View key={i} style={styles.repSummaryRow}>
+                        <Text style={styles.repSummaryLbl}>{item.label}</Text>
+                        <Text style={styles.repSummaryVal}>
+                          {item.row ? `${item.row.name} — ${item.suffix}` : '—'}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Ranked list */}
+                  {rep.ranked.length === 0 ? (
+                    <View style={styles.progEmpty}>
+                      <ChartBarIcon size={34} color="#b8a88a" />
+                      <Text style={styles.progEmptyTxt}>
+                        No test data recorded for {progSubject} yet.
+                      </Text>
+                    </View>
+                  ) : (
+                    rep.ranked.map((r, i) => (
+                      <TouchableOpacity
+                        key={i}
+                        style={styles.rankRow}
+                        onPress={() => openProgStudent(r.student)}>
+                        <Text style={[styles.rankNum, i < 3 && styles.rankNumTop]}>
+                          {medal(i) ? `${medal(i)} ` : ''}{i + 1}.
+                        </Text>
+                        <View style={styles.rankInfo}>
+                          <Text style={styles.rankName}>{r.name}</Text>
+                          <Text style={styles.rankMeta}>
+                            Roll No: {r.rollNo} · {r.taken}/{rep.totalTests} tests
+                          </Text>
+                        </View>
+                        <View style={styles.rankRight}>
+                          <Text style={styles.rankPct}>{r.avg}%</Text>
+                          {r.trendIcon ? <Text style={styles.rankTrend}>{r.trendIcon}</Text> : null}
+                        </View>
+                      </TouchableOpacity>
+                    ))
+                  )}
+
+                  {/* Students with nothing recorded — listed, never ranked */}
+                  {rep.noData.length > 0 && (
+                    <View style={{marginTop: 16}}>
+                      <Text style={styles.fieldLabel}>NO TEST DATA YET ({rep.noData.length})</Text>
+                      {rep.noData.map((r, i) => (
+                        <TouchableOpacity
+                          key={i}
+                          style={styles.noDataRow}
+                          onPress={() => openProgStudent(r.student)}>
+                          <Text style={styles.noDataName}>{r.name}</Text>
+                          <Text style={styles.noDataMeta}>Roll No: {r.rollNo}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+
+                  <Text style={styles.reportFooter}>Generated by QUANTAIP EduOS</Text>
+                  <View style={{height: 40}} />
+                </View>
+              );
+            })()
           ) : (
             /* ── Single student's progress view ── */
             (() => {
@@ -1955,6 +2126,59 @@ const styles = StyleSheet.create({
     padding: 12, alignItems: 'center', marginTop: 12,
   },
   noteSaveTxt: {color: '#C9A84C', fontSize: 14, fontWeight: '700'},
+  // ── CLASS PROGRESS REPORT ──
+  classReportBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#0d1f3c', borderRadius: 12, padding: 13, marginBottom: 16,
+  },
+  classReportBtnTxt: {color: '#C9A84C', fontSize: 14, fontWeight: '700'},
+  reportHeader: {
+    backgroundColor: '#0d1f3c', borderRadius: 14,
+    paddingHorizontal: 16, paddingVertical: 14, marginBottom: 12,
+  },
+  reportTitle: {fontSize: 17, fontWeight: '700', color: '#ffffff'},
+  reportSub: {fontSize: 11, color: '#C9A84C', marginTop: 3},
+  repSummaryCard: {
+    backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 14,
+  },
+  repSummaryTopRow: {alignItems: 'center', marginBottom: 12},
+  repSummaryAvgVal: {fontSize: 30, fontWeight: '700', color: '#B8960A'},
+  repSummaryAvgLbl: {
+    fontSize: 10, fontWeight: '700', color: '#9ca3af', letterSpacing: 1, marginTop: 2,
+  },
+  repSummaryRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#f3f4f6', gap: 10,
+  },
+  repSummaryLbl: {fontSize: 12, color: '#6b7280', fontWeight: '600'},
+  repSummaryVal: {
+    fontSize: 12, color: '#0d1f3c', fontWeight: '600', flexShrink: 1, textAlign: 'right',
+  },
+  rankRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#ffffff', borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 8,
+  },
+  rankNum: {fontSize: 14, fontWeight: '700', color: '#0d1f3c', minWidth: 42},
+  rankNumTop: {color: '#B8960A'},
+  rankInfo: {flex: 1},
+  rankName: {fontSize: 14, fontWeight: '600', color: '#0d1f3c'},
+  rankMeta: {fontSize: 11, color: '#9ca3af', marginTop: 2},
+  rankRight: {flexDirection: 'row', alignItems: 'center', gap: 6},
+  rankPct: {fontSize: 16, fontWeight: '700', color: '#B8960A'},
+  rankTrend: {fontSize: 13},
+  noDataRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#faf8f2', borderRadius: 10, padding: 11,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 6,
+  },
+  noDataName: {fontSize: 13, fontWeight: '600', color: '#6b7280'},
+  noDataMeta: {fontSize: 11, color: '#9ca3af'},
+  reportFooter: {
+    fontSize: 10, color: '#b8a88a', textAlign: 'center',
+    marginTop: 16, fontWeight: '500',
+  },
   className: {fontSize: 16, fontWeight: '700', color: '#0d1f3c'},
   summaryRow: {
     flexDirection: 'row', gap: 8, padding: 12,
