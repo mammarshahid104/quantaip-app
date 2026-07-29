@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect, useRef, useMemo, useCallback} from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,14 @@ import {
   Alert,
   Modal,
   Linking,
+  RefreshControl,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Share from 'react-native-share';
 import RNFS from 'react-native-fs';
 import {captureRef} from 'react-native-view-shot';
+import Svg, {Circle} from 'react-native-svg';
 import {
   ClipboardDocumentCheckIcon,
   CheckCircleIcon,
@@ -34,6 +36,7 @@ import {
 
 import {getSchoolCode} from '../config';
 import {theme} from '../theme';
+import {generateClassInsight, ClassInsightStats} from '../services/aiInsight';
 
 const TEST_TYPES = [
   {key: 'weekly', label: 'Weekly Test'},
@@ -43,6 +46,116 @@ const TEST_TYPES = [
   {key: 'final', label: 'Final Exam'},
   {key: 'classtest', label: 'Class Test'},
 ];
+
+// ── CLASS PROGRESS REPORT ──
+// Grade bands, applied to a student's *average* percentage across the subject
+// (not to any single test). Ordered high → low; the first band whose `min` is
+// met wins, so `min: 0` at the end is the catch-all.
+const GRADE_BANDS = [
+  {key: 'A+', label: 'A+', range: '90-100', color: '#16a34a', min: 90},
+  {key: 'A', label: 'A', range: '80-89', color: '#4ade80', min: 80},
+  {key: 'B', label: 'B', range: '70-79', color: '#B8960A', min: 70},
+  {key: 'C', label: 'C', range: '60-69', color: '#f59e0b', min: 60},
+  {key: 'D', label: 'D', range: '40-59', color: '#f97316', min: 40},
+  {key: 'F', label: 'Fail', range: '<40', color: '#ef4444', min: 0},
+];
+
+const MEDALS = ['🥇', '🥈', '🥉'];
+
+const bandFor = (pct: number) =>
+  GRADE_BANDS.find(b => pct >= b.min) || GRADE_BANDS[GRADE_BANDS.length - 1];
+
+// ── A4 EXPORT GEOMETRY ──
+// Pages are laid out at PAGE_W × PAGE_H dp and captured at exactly 2× into a
+// 1240×1754 PNG, so the shared image is a high-res A4 document rather than a
+// phone screenshot. 877/620 = 1.4145, matching 1754/1240.
+const PAGE_W = 620;
+const PAGE_H = 877;
+const PAGE_PAD = 28;
+const CAPTURE_W = PAGE_W * 2;
+const CAPTURE_H = PAGE_H * 2;
+
+// Ranked rows are a fixed height on the export pages, so how many fit on a
+// list page is arithmetic rather than guesswork — the list can never overflow
+// the page, it just rolls onto the next one.
+const P_ROW_H = 40;
+const P_ROW_GAP = 5;
+// Everything on a list page that isn't a row. These match the paddings and
+// font sizes in the p* styles below — change one and change the other.
+const P_HEADER_H = 84; // navy strip + its margin
+const P_FOOTER_H = 24;
+const P_LIST_TITLE_H = 23;
+const P_LIST_SPACE =
+  PAGE_H - PAGE_PAD * 2 - P_HEADER_H - P_FOOTER_H - P_LIST_TITLE_H;
+const ROWS_PER_PAGE = Math.floor(P_LIST_SPACE / (P_ROW_H + P_ROW_GAP)); // 15
+
+// Doughnut chart. Each band is one <Circle> on a shared ring: strokeDasharray
+// draws an arc of the band's length, and strokeDashoffset slides that arc to
+// where the previous band ended. rotation="-90" moves 0° from 3 o'clock to
+// 12 o'clock so the ring reads clockwise from the top.
+function GradeDonut({
+  size,
+  stroke,
+  bands,
+  total,
+}: {
+  size: number;
+  stroke: number;
+  bands: {color: string; count: number}[];
+  total: number;
+}) {
+  const c = size / 2;
+  const r = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * r;
+
+  let consumed = 0;
+  const arcs = total > 0 ? bands.filter(b => b.count > 0) : [];
+
+  return (
+    <View style={{width: size, height: size, alignItems: 'center', justifyContent: 'center'}}>
+      <Svg width={size} height={size}>
+        <Circle cx={c} cy={c} r={r} stroke="#f0ece0" strokeWidth={stroke} fill="none" />
+        {arcs.map((b, i) => {
+          const len = (b.count / total) * circumference;
+          // Offsets are written as (circumference - consumed) rather than
+          // -consumed: same arc position, but never a negative dashoffset.
+          const offset = circumference - consumed;
+          consumed += len;
+          return (
+            <Circle
+              key={i}
+              cx={c}
+              cy={c}
+              r={r}
+              stroke={b.color}
+              strokeWidth={stroke}
+              fill="none"
+              strokeDasharray={`${len} ${Math.max(0, circumference - len)}`}
+              strokeDashoffset={offset}
+              rotation={-90}
+              originX={c}
+              originY={c}
+            />
+          );
+        })}
+      </Svg>
+      <View style={{position: 'absolute', alignItems: 'center'}}>
+        <Text style={{fontSize: size * 0.26, fontWeight: '700', color: '#0d1f3c'}}>
+          {total}
+        </Text>
+        <Text
+          style={{
+            fontSize: Math.max(8, size * 0.085),
+            fontWeight: '600',
+            color: '#8b7355',
+            letterSpacing: 1,
+          }}>
+          {total === 1 ? 'STUDENT' : 'STUDENTS'}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 export default function TeacherScreen({navigation}: any) {
   const [teacher, setTeacher] = useState<any>(null);
@@ -362,9 +475,25 @@ export default function TeacherScreen({navigation}: any) {
   const [progStudent, setProgStudent] = useState<any>(null);
   const [showClassReport, setShowClassReport] = useState(false);
   const [sharingReport, setSharingReport] = useState(false);
-  const reportRef = useRef<any>(null);
+  const [refreshingReport, setRefreshingReport] = useState(false);
+  // Export pages are only mounted while a share is in flight; these refs are
+  // the capture targets, one per A4 page.
+  const [exportPages, setExportPages] = useState<any[]>([]);
+  const pageRefs = useRef<any[]>([]);
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+
+  // AI insight — cached per "class|subject" so re-opening the report costs
+  // nothing. Only a first load or a pull-to-refresh calls the API.
+  const [insight, setInsight] = useState('');
+  const [insightLoading, setInsightLoading] = useState(false);
+  const insightCache = useRef<{[key: string]: string}>({});
+  // Guard against a slow API reply landing after the teacher has already
+  // switched class or subject.
+  const progClassRef = useRef(progClass);
+  const progSubjectRef = useRef(progSubject);
+  progClassRef.current = progClass;
+  progSubjectRef.current = progSubject;
 
   const today = new Date().toLocaleDateString('en-GB', {
     day: '2-digit', month: 'short', year: 'numeric',
@@ -753,8 +882,9 @@ QUANTAIP EduOS`;
   // ── CLASS PROGRESS REPORT ──
   // Same per-student maths as the individual view, run across the whole class
   // and ranked. Students with no recorded test are listed separately rather
-  // than ranked at 0%.
-  const buildClassReport = () => {
+  // than ranked at 0%. Memoised because every section of the report screen —
+  // and every A4 export page — reads from this one object.
+  const rep = useMemo(() => {
     // Denominator for "4/5 tests" — every test the class sat in this subject.
     const allTestIds = new Set<string>();
     progStudents.forEach(s => {
@@ -772,6 +902,10 @@ QUANTAIP EduOS`;
         rollNo: s.rollNo || '—',
         avg: d.avg,
         taken: d.entries.length,
+        // Anything the student has no score for — whether explicitly marked
+        // absent or simply never recorded.
+        missed: Math.max(0, totalTests - d.entries.length),
+        absentCount: d.absentCount,
         trend: d.trend,
         trendIcon: d.trendIcon,
         trendDiff: d.trendDiff,
@@ -787,52 +921,231 @@ QUANTAIP EduOS`;
       ? Math.round(ranked.reduce((a, r) => a + r.avg, 0) / ranked.length)
       : 0;
 
+    // Sittings, not students: how many student-test slots were actually taken
+    // versus missed across the whole class for this subject.
+    const presentSittings = ranked.reduce((a, r) => a + r.taken, 0);
+    const absentSittings = rows.reduce((a, r) => a + r.missed, 0);
+
+    // Grade distribution over student averages. Students with nothing recorded
+    // are left out — a 0-test student is not a Fail, they're unmeasured.
+    const distribution = GRADE_BANDS.map(b => {
+      const count = ranked.filter(r => bandFor(r.avg).key === b.key).length;
+      return {
+        ...b,
+        count,
+        share: ranked.length ? Math.round((count / ranked.length) * 100) : 0,
+      };
+    });
+
     // Most improved / needs attention only mean something once a student has
     // enough tests for a trend; otherwise fall back to the lowest average.
     const withTrend = ranked.filter(r => r.trend);
     const mostImproved = withTrend.length
       ? withTrend.reduce((best, r) => (r.trendDiff > best.trendDiff ? r : best))
       : null;
-    const worstTrend = withTrend.length
-      ? withTrend.reduce((worst, r) => (r.trendDiff < worst.trendDiff ? r : worst))
-      : null;
-    const needsAttention = worstTrend && worstTrend.trendDiff < -5
-      ? worstTrend
-      : ranked.length ? ranked[ranked.length - 1] : null;
+
+    // A student qualifies on ANY of: failing average, two or more tests with no
+    // score, or a declining trend. Reasons are combined into one line, and the
+    // worst cases float to the top so the three shown are the three that
+    // matter most.
+    const attention = rows
+      .map(r => {
+        const reasons: string[] = [];
+        let severity = 0;
+        if (r.taken === 0 && totalTests >= 2) {
+          reasons.push(`no score in any of ${totalTests} tests`);
+          severity += 60;
+        } else {
+          if (r.avg < 40) {
+            reasons.push(`${r.avg}% avg`);
+            severity += 100 - r.avg;
+          }
+          if (r.missed >= 2) {
+            reasons.push(`missed ${r.missed} tests`);
+            severity += r.missed * 8;
+          }
+          if (r.trendDiff < -5) {
+            reasons.push('declining');
+            severity += Math.min(40, Math.abs(Math.round(r.trendDiff)));
+          }
+        }
+        return {...r, reasons, severity};
+      })
+      .filter(r => r.reasons.length > 0)
+      .sort((a, b) => b.severity - a.severity);
+
+    const needsAttention = attention.slice(0, 3).map(r => ({
+      ...r,
+      // "32% avg, declining" — sentence-cased for the card.
+      reason: r.reasons.join(', ').replace(/^./, ch => ch.toUpperCase()),
+    }));
+
+    const belowForty = ranked.filter(r => r.avg < 40).length;
+
+    // Class-level direction: the mean of every student's own trend delta.
+    const trendDiffAvg = withTrend.length
+      ? withTrend.reduce((a, r) => a + r.trendDiff, 0) / withTrend.length
+      : 0;
+    const classTrend: ClassInsightStats['trend'] =
+      trendDiffAvg > 3 ? 'improving' : trendDiffAvg < -3 ? 'declining' : 'steady';
 
     return {
       ranked,
       noData,
       totalTests,
       classAvg,
+      distribution,
+      presentSittings,
+      absentSittings,
+      belowForty,
+      classTrend,
+      topPerformers: ranked.slice(0, 3),
       highest: ranked.length ? ranked[0] : null,
       lowest: ranked.length ? ranked[ranked.length - 1] : null,
       mostImproved: mostImproved && mostImproved.trendDiff > 5 ? mostImproved : null,
       needsAttention,
     };
+    // progressData is a pure helper over its arguments, so the inputs below are
+    // the only things that can change the result.
+  }, [progStudents, progSubject]);
+
+  // Kept in a ref so the insight effect can read the latest figures without
+  // re-running every time an unrelated part of the report recomputes.
+  const repRef = useRef(rep);
+  repRef.current = rep;
+
+  // Fetch (or serve from cache) the AI insight for the current class+subject.
+  // force=true is the pull-to-refresh path and bypasses the cache.
+  const loadInsight = useCallback(
+    async (force: boolean) => {
+      const cls = progClass;
+      const sub = progSubject;
+      if (!cls || !sub) return;
+
+      const key = `${cls}|${sub}`;
+      if (!force && insightCache.current[key]) {
+        setInsight(insightCache.current[key]);
+        return;
+      }
+
+      const current = repRef.current;
+      if (current.ranked.length === 0) {
+        setInsight('');
+        return;
+      }
+
+      setInsightLoading(true);
+      try {
+        const text = await generateClassInsight({
+          className: cls,
+          subject: sub,
+          average: current.classAvg,
+          highest: current.highest?.avg || 0,
+          lowest: current.lowest?.avg || 0,
+          belowForty: current.belowForty,
+          studentCount: current.ranked.length,
+          testsConducted: current.totalTests,
+          trend: current.classTrend,
+        });
+        insightCache.current[key] = text;
+        // The teacher may have navigated on while the request was in flight.
+        if (progClassRef.current === cls && progSubjectRef.current === sub) {
+          setInsight(text);
+        }
+      } finally {
+        setInsightLoading(false);
+      }
+    },
+    [progClass, progSubject],
+  );
+
+  // Opening the report loads the insight once; the cache keeps every later
+  // open free.
+  useEffect(() => {
+    if (!showClassReport) return;
+    loadInsight(false);
+  }, [showClassReport, loadInsight]);
+
+  // Pull-to-refresh: re-read the class from Firestore and regenerate the
+  // insight against the fresh numbers.
+  const refreshReport = async () => {
+    setRefreshingReport(true);
+    try {
+      const snapshot = await firestore()
+        .collection('schools').doc(getSchoolCode())
+        .collection('students')
+        .where('class', '==', progClass)
+        .get();
+      setProgStudents(snapshot.docs.map(d => d.data()));
+      // repRef still holds the previous figures at this point; let the state
+      // update land first so the insight is generated from what was just read.
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 0));
+      await loadInsight(true);
+    } catch (e) {
+      console.log('❌ QUANTAIP Error:', e);
+    } finally {
+      setRefreshingReport(false);
+    }
   };
 
-  // Export the report as a PNG and hand it to the share sheet.
-  // snapshotContentContainer captures the ScrollView's full content rather than
-  // the visible viewport, so every student is in the image however long the
-  // class is. Deliberately image-based — react-native-html-to-pdf is the
-  // library that caused the "Uri.getScheme() on null" crash and stays out.
+  // Export the report as A4-proportioned PNGs and hand them to the share sheet.
+  //
+  // The pages are laid out off-screen at 620×877 dp and captured at 2× into
+  // 1240×1754 images, so what gets shared is a real document page rather than a
+  // phone screenshot. Page 1 carries the summary sections (header, stat cards,
+  // doughnut, needs-attention, AI insight, top performers); the ranked list
+  // then runs across as many further pages as it needs, ROWS_PER_PAGE at a
+  // time. Splitting beats shrinking here: row height stays legible for a
+  // 35-student class instead of collapsing to fit, and page count is pure
+  // arithmetic so the list can never overflow.
+  //
+  // Deliberately image-based — react-native-html-to-pdf is the library that
+  // caused the "Uri.getScheme() on null" crash and stays out.
   const shareClassReport = async () => {
     if (sharingReport) return;
     setSharingReport(true);
     try {
-      const uri = await captureRef(reportRef, {
-        format: 'png',
-        quality: 0.9,
-        snapshotContentContainer: true,
-      });
+      // Page 1 is the summary; the rest are slices of the ranked list, with
+      // the no-data students appended to the final slice.
+      const listPages: any[] = [];
+      for (let i = 0; i < rep.ranked.length; i += ROWS_PER_PAGE) {
+        listPages.push({rows: rep.ranked.slice(i, i + ROWS_PER_PAGE), startAt: i});
+      }
+      if (listPages.length === 0) listPages.push({rows: [], startAt: 0});
 
-      await Share.open({
-        url: uri.startsWith('file://') ? uri : `file://${uri}`,
-        type: 'image/png',
-        title: `Class Report - ${progClass} - ${progSubject}`,
-        failOnCancel: false,
-      });
+      const pages = [{kind: 'summary'}, ...listPages.map(p => ({kind: 'list', ...p}))];
+      pageRefs.current = [];
+      setExportPages(pages);
+
+      // Let React commit the off-screen pages and Android lay them out before
+      // asking view-shot to draw them.
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 450));
+
+      const uris: string[] = [];
+      for (let i = 0; i < pages.length; i++) {
+        const ref = pageRefs.current[i];
+        if (!ref) continue;
+        const uri = await captureRef(ref, {
+          format: 'png',
+          quality: 1,
+          result: 'tmpfile',
+          width: CAPTURE_W,
+          height: CAPTURE_H,
+        });
+        uris.push(uri.startsWith('file://') ? uri : `file://${uri}`);
+      }
+
+      if (uris.length === 0) {
+        Alert.alert('Error', 'Could not render report.');
+        return;
+      }
+
+      const title = `Class Report - ${progClass} - ${progSubject}`;
+      await Share.open(
+        uris.length === 1
+          ? {url: uris[0], type: 'image/png', title, failOnCancel: false}
+          : {urls: uris, type: 'image/png', title, failOnCancel: false},
+      );
     } catch (e: any) {
       const msg = String(e?.message || '');
       if (!msg.includes('User did not share') && !msg.includes('cancel')) {
@@ -840,6 +1153,7 @@ QUANTAIP EduOS`;
         Alert.alert('Error', 'Could not share report.');
       }
     } finally {
+      setExportPages([]);
       setSharingReport(false);
     }
   };
@@ -1455,11 +1769,11 @@ QUANTAIP EduOS`;
       )}
 
       {/* ── CLASS PROGRESS REPORT ──
-          Its own screen so the ScrollView itself can be the capture target:
-          captureRef with snapshotContentContainer grabs the whole scrollable
-          content, not just the visible viewport, so a 30-student class exports
-          in full. The Back/Share bar sits outside the ScrollView and so stays
-          out of the image. */}
+          Sections run header → summary cards → grade doughnut → needs
+          attention → AI insight → top performers → ranked list → footer.
+          The Back/Share bar sits outside the ScrollView; the shared image is
+          rendered separately as A4 pages (see the export layer at the bottom
+          of this file) rather than being a screenshot of this view. */}
       {tab === 'Progress' && showClassReport && !progStudent && (
         <View style={{flex: 1}}>
           <View style={styles.reportBar}>
@@ -1475,97 +1789,182 @@ QUANTAIP EduOS`;
             </TouchableOpacity>
           </View>
 
-          <ScrollView ref={reportRef} style={styles.content} collapsable={false}>
-            {(() => {
-              const rep = buildClassReport();
-              const medal = (i: number) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '');
+          <ScrollView
+            style={styles.content}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshingReport}
+                onRefresh={refreshReport}
+                colors={['#B8960A']}
+                tintColor="#B8960A"
+              />
+            }>
+            {/* 1 — HEADER */}
+            <View style={styles.reportHeader}>
+              <Text style={styles.reportTitle}>{progClass} — {progSubject}</Text>
+              <Text style={styles.reportSub}>
+                Class Progress Report · {schoolName || getSchoolCode()} · {today}
+              </Text>
+              <Text style={styles.reportSub}>
+                {rep.ranked.length} student(s) ranked · {rep.totalTests} test(s)
+              </Text>
+            </View>
 
-              return (
-                <View style={styles.reportCapture} collapsable={false}>
-                  {/* Header — kept inside the capture so a shared image is
-                      self-explanatory on its own. */}
-                  <View style={styles.reportHeader}>
-                    <Text style={styles.reportTitle}>{progClass} — {progSubject}</Text>
-                    <Text style={styles.reportSub}>
-                      Class Progress Report · {schoolName || getSchoolCode()} · {today}
-                    </Text>
-                    <Text style={styles.reportSub}>
-                      {rep.ranked.length} student(s) ranked · {rep.totalTests} test(s)
-                    </Text>
-                  </View>
+            {/* 2 — SUMMARY CARDS */}
+            <View style={styles.sumGrid}>
+              {[
+                {lbl: 'CLASS AVERAGE', val: `${rep.classAvg}%`, color: '#B8960A', sub: `${rep.ranked.length} student(s)`},
+                {lbl: 'HIGHEST', val: rep.highest ? `${rep.highest.avg}%` : '—', color: '#16a34a', sub: rep.highest?.name || ''},
+                {lbl: 'LOWEST', val: rep.lowest ? `${rep.lowest.avg}%` : '—', color: '#ef4444', sub: rep.lowest?.name || ''},
+                {lbl: 'PRESENT / ABSENT', val: `${rep.presentSittings} / ${rep.absentSittings}`, color: '#0d1f3c', sub: 'test sittings'},
+                {lbl: 'TESTS CONDUCTED', val: `${rep.totalTests}`, color: '#0d1f3c', sub: progSubject},
+              ].map((c, i) => (
+                <View key={i} style={styles.sumCard}>
+                  <Text style={styles.sumLbl}>{c.lbl}</Text>
+                  <Text style={[styles.sumVal, {color: c.color}]}>{c.val}</Text>
+                  {c.sub ? (
+                    <Text style={styles.sumSub} numberOfLines={1}>{c.sub}</Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
 
-                  {/* Class summary */}
-                  <View style={styles.repSummaryCard}>
-                    <View style={styles.repSummaryTopRow}>
-                      <Text style={styles.repSummaryAvgVal}>{rep.classAvg}%</Text>
-                      <Text style={styles.repSummaryAvgLbl}>CLASS AVERAGE</Text>
-                    </View>
-                    {[
-                      {label: 'Highest', row: rep.highest, suffix: rep.highest ? `${rep.highest.avg}%` : ''},
-                      {label: 'Lowest', row: rep.lowest, suffix: rep.lowest ? `${rep.lowest.avg}%` : ''},
-                      {label: 'Most Improved', row: rep.mostImproved, suffix: '📈'},
-                      {label: 'Needs Attention', row: rep.needsAttention, suffix: '⚠️'},
-                    ].map((item, i) => (
-                      <View key={i} style={styles.repSummaryRow}>
-                        <Text style={styles.repSummaryLbl}>{item.label}</Text>
-                        <Text style={styles.repSummaryVal}>
-                          {item.row ? `${item.row.name} — ${item.suffix}` : '—'}
+            {/* 3 — GRADE DISTRIBUTION */}
+            {rep.ranked.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Grade Distribution</Text>
+                <View style={styles.donutRow}>
+                  <GradeDonut
+                    size={150}
+                    stroke={26}
+                    bands={rep.distribution}
+                    total={rep.ranked.length}
+                  />
+                  <View style={styles.legend}>
+                    {rep.distribution.filter(b => b.count > 0).map(b => (
+                      <View key={b.key} style={styles.legendRow}>
+                        <View style={[styles.legendDot, {backgroundColor: b.color}]} />
+                        <Text style={styles.legendLbl}>
+                          {b.label} <Text style={styles.legendRange}>({b.range})</Text>
                         </Text>
+                        <Text style={styles.legendVal}>{b.count} · {b.share}%</Text>
                       </View>
                     ))}
                   </View>
+                </View>
+              </View>
+            )}
 
-                  {/* Ranked list */}
-                  {rep.ranked.length === 0 ? (
-                    <View style={styles.progEmpty}>
-                      <ChartBarIcon size={34} color="#b8a88a" />
-                      <Text style={styles.progEmptyTxt}>
-                        No test data recorded for {progSubject} yet.
+            {/* 4 — NEEDS ATTENTION (hidden entirely when nobody qualifies) */}
+            {rep.needsAttention.length > 0 && (
+              <View style={styles.attnCard}>
+                <Text style={styles.attnTitle}>⚠️ Needs Attention</Text>
+                {rep.needsAttention.map((r, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={styles.attnRow}
+                    onPress={() => openProgStudent(r.student)}>
+                    <View style={{flex: 1}}>
+                      <Text style={styles.attnName}>{r.name}</Text>
+                      <Text style={styles.attnReason}>{r.reason}</Text>
+                    </View>
+                    <Text style={styles.attnRoll}>Roll {r.rollNo}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* 5 — AI CLASS INSIGHT */}
+            {rep.ranked.length > 0 && (
+              <View style={styles.aiCard}>
+                <Text style={styles.aiTitle}>✨ AI Class Insight</Text>
+                {insightLoading ? (
+                  <View style={styles.aiLoading}>
+                    <ActivityIndicator size="small" color="#B8960A" />
+                    <Text style={styles.aiLoadingTxt}>Reading the class data…</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.aiBody}>{insight || '—'}</Text>
+                )}
+                <Text style={styles.aiHint}>Pull down to refresh</Text>
+              </View>
+            )}
+
+            {/* 6 — TOP PERFORMERS */}
+            {rep.topPerformers.length > 0 && (
+              <>
+                <Text style={styles.fieldLabel}>TOP PERFORMERS</Text>
+                <View style={styles.podiumRow}>
+                  {rep.topPerformers.map((r, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      style={styles.podiumCard}
+                      onPress={() => openProgStudent(r.student)}>
+                      <Text style={styles.podiumMedal}>{MEDALS[i]}</Text>
+                      <Text style={styles.podiumName} numberOfLines={2}>{r.name}</Text>
+                      <Text style={styles.podiumRoll}>Roll {r.rollNo}</Text>
+                      <Text style={styles.podiumPct}>{r.avg}%</Text>
+                      <Text style={styles.podiumTrend}>{r.trend || '—'}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+
+            {/* 7 — RANKED STUDENT LIST */}
+            {rep.ranked.length === 0 ? (
+              <View style={styles.progEmpty}>
+                <ChartBarIcon size={34} color="#b8a88a" />
+                <Text style={styles.progEmptyTxt}>
+                  No test data recorded for {progSubject} yet.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.fieldLabel}>CLASS RANKING ({rep.ranked.length})</Text>
+                {rep.ranked.map((r, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={styles.rankRow}
+                    onPress={() => openProgStudent(r.student)}>
+                    <Text style={[styles.rankNum, i < 3 && styles.rankNumTop]}>
+                      {MEDALS[i] ? `${MEDALS[i]} ` : ''}{i + 1}.
+                    </Text>
+                    <View style={styles.rankInfo}>
+                      <Text style={styles.rankName}>{r.name}</Text>
+                      <Text style={styles.rankMeta}>
+                        Roll No: {r.rollNo} · {r.taken}/{rep.totalTests} tests
                       </Text>
                     </View>
-                  ) : (
-                    rep.ranked.map((r, i) => (
-                      <TouchableOpacity
-                        key={i}
-                        style={styles.rankRow}
-                        onPress={() => openProgStudent(r.student)}>
-                        <Text style={[styles.rankNum, i < 3 && styles.rankNumTop]}>
-                          {medal(i) ? `${medal(i)} ` : ''}{i + 1}.
-                        </Text>
-                        <View style={styles.rankInfo}>
-                          <Text style={styles.rankName}>{r.name}</Text>
-                          <Text style={styles.rankMeta}>
-                            Roll No: {r.rollNo} · {r.taken}/{rep.totalTests} tests
-                          </Text>
-                        </View>
-                        <View style={styles.rankRight}>
-                          <Text style={styles.rankPct}>{r.avg}%</Text>
-                          {r.trendIcon ? <Text style={styles.rankTrend}>{r.trendIcon}</Text> : null}
-                        </View>
-                      </TouchableOpacity>
-                    ))
-                  )}
-
-                  {/* Students with nothing recorded — listed, never ranked */}
-                  {rep.noData.length > 0 && (
-                    <View style={{marginTop: 16}}>
-                      <Text style={styles.fieldLabel}>NO TEST DATA YET ({rep.noData.length})</Text>
-                      {rep.noData.map((r, i) => (
-                        <TouchableOpacity
-                          key={i}
-                          style={styles.noDataRow}
-                          onPress={() => openProgStudent(r.student)}>
-                          <Text style={styles.noDataName}>{r.name}</Text>
-                          <Text style={styles.noDataMeta}>Roll No: {r.rollNo}</Text>
-                        </TouchableOpacity>
-                      ))}
+                    <View style={styles.rankRight}>
+                      <Text style={styles.rankPct}>{r.avg}%</Text>
+                      {r.trendIcon ? <Text style={styles.rankTrend}>{r.trendIcon}</Text> : null}
                     </View>
-                  )}
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
 
-                  <Text style={styles.reportFooter}>Generated by QUANTAIP EduOS</Text>
-                </View>
-              );
-            })()}
+            {/* Students with nothing recorded — listed, never ranked */}
+            {rep.noData.length > 0 && (
+              <View style={{marginTop: 16}}>
+                <Text style={styles.fieldLabel}>NO TEST DATA YET ({rep.noData.length})</Text>
+                {rep.noData.map((r, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={styles.noDataRow}
+                    onPress={() => openProgStudent(r.student)}>
+                    <Text style={styles.noDataName}>{r.name}</Text>
+                    <Text style={styles.noDataMeta}>Roll No: {r.rollNo}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* 8 — FOOTER */}
+            <Text style={styles.reportFooter}>
+              Generated by QUANTAIP EduOS · {today}
+            </Text>
             <View style={{height: 40}} />
           </ScrollView>
         </View>
@@ -2002,6 +2401,180 @@ QUANTAIP EduOS`;
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* ── A4 EXPORT LAYER ──
+          Only mounted while a share is running. Each page is a fixed
+          620×877 dp View parked off-screen (not hidden with opacity — an
+          opacity-0 view captures blank on Android) and drawn directly by
+          captureRef, so what gets shared is a laid-out document page rather
+          than whatever happened to be scrolled into view. collapsable={false}
+          keeps Android from flattening the page out of the view hierarchy and
+          leaving nothing to capture. */}
+      {exportPages.length > 0 && (
+        <View style={styles.exportLayer} pointerEvents="none">
+          {exportPages.map((page, i) => (
+            <View
+              key={i}
+              ref={(el: any) => {
+                pageRefs.current[i] = el;
+              }}
+              collapsable={false}
+              style={styles.page}>
+              {/* Page header strip — repeated so any single page stands alone
+                  if it gets forwarded on its own. */}
+              <View style={styles.pHeader}>
+                <View style={{flex: 1}}>
+                  <Text style={styles.pHeaderTitle}>{progClass} — {progSubject}</Text>
+                  <Text style={styles.pHeaderSub}>
+                    Class Progress Report · {schoolName || getSchoolCode()} · {today}
+                  </Text>
+                </View>
+                <Text style={styles.pHeaderPage}>
+                  Page {i + 1} of {exportPages.length}
+                </Text>
+              </View>
+
+              <View style={styles.pBody}>
+                {page.kind === 'summary' ? (
+                  <>
+                    {/* Summary cards — 3 up, then 2 up */}
+                    <View style={styles.pSumGrid}>
+                      {[
+                        {lbl: 'CLASS AVERAGE', val: `${rep.classAvg}%`, color: '#B8960A', sub: `${rep.ranked.length} student(s)`},
+                        {lbl: 'HIGHEST', val: rep.highest ? `${rep.highest.avg}%` : '—', color: '#16a34a', sub: rep.highest?.name || ''},
+                        {lbl: 'LOWEST', val: rep.lowest ? `${rep.lowest.avg}%` : '—', color: '#ef4444', sub: rep.lowest?.name || ''},
+                        {lbl: 'PRESENT / ABSENT', val: `${rep.presentSittings} / ${rep.absentSittings}`, color: '#0d1f3c', sub: 'test sittings'},
+                        {lbl: 'TESTS CONDUCTED', val: `${rep.totalTests}`, color: '#0d1f3c', sub: progSubject},
+                      ].map((c, k) => (
+                        <View key={k} style={styles.pSumCard}>
+                          <Text style={styles.pSumLbl}>{c.lbl}</Text>
+                          <Text style={[styles.pSumVal, {color: c.color}]}>{c.val}</Text>
+                          {c.sub ? (
+                            <Text style={styles.pSumSub} numberOfLines={1}>{c.sub}</Text>
+                          ) : null}
+                        </View>
+                      ))}
+                    </View>
+
+                    {/* Grade distribution */}
+                    <View style={styles.pCard}>
+                      <Text style={styles.pCardTitle}>GRADE DISTRIBUTION</Text>
+                      <View style={styles.pDonutRow}>
+                        <GradeDonut
+                          size={144}
+                          stroke={26}
+                          bands={rep.distribution}
+                          total={rep.ranked.length}
+                        />
+                        <View style={styles.pLegend}>
+                          {rep.distribution.filter(b => b.count > 0).map(b => (
+                            <View key={b.key} style={styles.pLegendRow}>
+                              <View style={[styles.pLegendDot, {backgroundColor: b.color}]} />
+                              <Text style={styles.pLegendLbl}>
+                                {b.label} <Text style={styles.pLegendRange}>({b.range})</Text>
+                              </Text>
+                              <Text style={styles.pLegendVal}>{b.count} · {b.share}%</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Needs attention */}
+                    {rep.needsAttention.length > 0 && (
+                      <View style={styles.pAttnCard}>
+                        <Text style={styles.pAttnTitle}>⚠️ NEEDS ATTENTION</Text>
+                        {/* One line each: page 1's height budget assumes at
+                            most 3 single-line rows here. */}
+                        {rep.needsAttention.map((r, k) => (
+                          <Text key={k} style={styles.pAttnRow} numberOfLines={1}>
+                            <Text style={styles.pAttnName}>{r.name}</Text>
+                            <Text style={styles.pAttnReason}>  — {r.reason}</Text>
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* AI insight */}
+                    {insight ? (
+                      <View style={styles.pAiCard}>
+                        <Text style={styles.pAiTitle}>✨ AI CLASS INSIGHT</Text>
+                        {/* Capped so a long model reply can't push the top
+                            performers off the bottom of the page. */}
+                        <Text style={styles.pAiBody} numberOfLines={3}>{insight}</Text>
+                      </View>
+                    ) : null}
+
+                    {/* Top performers */}
+                    {rep.topPerformers.length > 0 && (
+                      <View style={styles.pPodiumRow}>
+                        {rep.topPerformers.map((r, k) => (
+                          <View key={k} style={styles.pPodiumCard}>
+                            <Text style={styles.pPodiumMedal}>{MEDALS[k]}</Text>
+                            <Text style={styles.pPodiumName} numberOfLines={1}>{r.name}</Text>
+                            <Text style={styles.pPodiumRoll}>Roll {r.rollNo}</Text>
+                            <Text style={styles.pPodiumPct}>{r.avg}%</Text>
+                            <Text style={styles.pPodiumTrend}>{r.trend || '—'}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.pListTitle}>
+                      CLASS RANKING{' '}
+                      {exportPages.length > 2
+                        ? `(${page.startAt + 1}–${page.startAt + page.rows.length} of ${rep.ranked.length})`
+                        : `(${rep.ranked.length})`}
+                    </Text>
+                    {page.rows.length === 0 ? (
+                      <Text style={styles.pEmpty}>
+                        No test data recorded for {progSubject} yet.
+                      </Text>
+                    ) : (
+                      page.rows.map((r: any, k: number) => {
+                        const rank = page.startAt + k;
+                        return (
+                          <View key={k} style={styles.pRankRow}>
+                            <Text style={[styles.pRankNum, rank < 3 && styles.pRankNumTop]}>
+                              {MEDALS[rank] ? `${MEDALS[rank]} ` : ''}{rank + 1}.
+                            </Text>
+                            <View style={{flex: 1}}>
+                              <Text style={styles.pRankName} numberOfLines={1}>{r.name}</Text>
+                              <Text style={styles.pRankMeta}>
+                                Roll No: {r.rollNo} · {r.taken}/{rep.totalTests} tests
+                              </Text>
+                            </View>
+                            <Text style={styles.pRankPct}>{r.avg}%</Text>
+                            <Text style={styles.pRankTrend}>{r.trendIcon || ''}</Text>
+                          </View>
+                        );
+                      })
+                    )}
+
+                    {/* No-data students ride along on the last list page */}
+                    {i === exportPages.length - 1 && rep.noData.length > 0 && (
+                      <View style={{marginTop: 14}}>
+                        <Text style={styles.pListTitle}>
+                          NO TEST DATA YET ({rep.noData.length})
+                        </Text>
+                        <Text style={styles.pNoDataTxt}>
+                          {rep.noData.map(r => `${r.name} (Roll ${r.rollNo})`).join(' · ')}
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+
+              <Text style={styles.pFooter}>
+                Generated by QUANTAIP EduOS · {today}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -2201,31 +2774,77 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 9, minWidth: 130, alignItems: 'center',
   },
   shareReportTxt: {color: '#C9A84C', fontSize: 13, fontWeight: '700'},
-  // Solid background so the captured PNG never comes out transparent.
-  reportCapture: {backgroundColor: '#faf8f2', paddingTop: 4},
   reportHeader: {
     backgroundColor: '#0d1f3c', borderRadius: 14,
     paddingHorizontal: 16, paddingVertical: 14, marginBottom: 12,
   },
   reportTitle: {fontSize: 17, fontWeight: '700', color: '#ffffff'},
   reportSub: {fontSize: 11, color: '#C9A84C', marginTop: 3},
-  repSummaryCard: {
+  // Summary cards — 3 across, then the last 2 grow to fill the second row.
+  sumGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16},
+  sumCard: {
+    backgroundColor: '#ffffff', borderRadius: 12, padding: 10,
+    borderWidth: 1, borderColor: '#ece5d3', flexBasis: '31%', flexGrow: 1,
+  },
+  sumLbl: {fontSize: 9, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.6},
+  sumVal: {fontSize: 20, fontWeight: '700', marginTop: 4},
+  sumSub: {fontSize: 10, color: '#b8a88a', marginTop: 2},
+
+  card: {
     backgroundColor: '#ffffff', borderRadius: 14, padding: 14,
-    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 14,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 16,
   },
-  repSummaryTopRow: {alignItems: 'center', marginBottom: 12},
-  repSummaryAvgVal: {fontSize: 30, fontWeight: '700', color: '#B8960A'},
-  repSummaryAvgLbl: {
-    fontSize: 10, fontWeight: '700', color: '#9ca3af', letterSpacing: 1, marginTop: 2,
+  cardTitle: {fontSize: 14, fontWeight: '700', color: '#0d1f3c', marginBottom: 12},
+
+  // Grade distribution — doughnut left, legend right.
+  donutRow: {flexDirection: 'row', alignItems: 'center', gap: 14},
+  legend: {flex: 1, gap: 7},
+  legendRow: {flexDirection: 'row', alignItems: 'center', gap: 7},
+  legendDot: {width: 10, height: 10, borderRadius: 5},
+  legendLbl: {fontSize: 11, fontWeight: '600', color: '#0d1f3c', flex: 1},
+  legendRange: {fontSize: 10, color: '#9ca3af', fontWeight: '400'},
+  legendVal: {fontSize: 10, fontWeight: '700', color: '#4a3728'},
+
+  attnCard: {
+    backgroundColor: '#fef2f2', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: '#fecaca', marginBottom: 16,
   },
-  repSummaryRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#f3f4f6', gap: 10,
+  attnTitle: {fontSize: 14, fontWeight: '700', color: '#b91c1c', marginBottom: 10},
+  attnRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#ffffff', borderRadius: 10, padding: 10, marginBottom: 6,
   },
-  repSummaryLbl: {fontSize: 12, color: '#6b7280', fontWeight: '600'},
-  repSummaryVal: {
-    fontSize: 12, color: '#0d1f3c', fontWeight: '600', flexShrink: 1, textAlign: 'right',
+  attnName: {fontSize: 13, fontWeight: '700', color: '#0d1f3c'},
+  attnReason: {fontSize: 11, color: '#b91c1c', marginTop: 2},
+  attnRoll: {fontSize: 10, color: '#9ca3af', fontWeight: '600'},
+
+  aiCard: {
+    backgroundColor: '#fdf8ee', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: '#e8d5a3', marginBottom: 16,
   },
+  aiTitle: {
+    fontSize: 13, fontWeight: '700', color: '#B8960A',
+    letterSpacing: 0.3, marginBottom: 8,
+  },
+  aiBody: {fontSize: 13, lineHeight: 20, color: '#4a3728'},
+  aiLoading: {flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4},
+  aiLoadingTxt: {fontSize: 12, color: '#8b7355'},
+  aiHint: {fontSize: 10, color: '#b8a88a', marginTop: 8, fontStyle: 'italic'},
+
+  podiumRow: {flexDirection: 'row', gap: 8, marginBottom: 16},
+  podiumCard: {
+    flex: 1, backgroundColor: '#ffffff', borderRadius: 12, padding: 10,
+    borderWidth: 1, borderColor: '#e8d5a3', alignItems: 'center',
+  },
+  podiumMedal: {fontSize: 22},
+  podiumName: {
+    fontSize: 12, fontWeight: '700', color: '#0d1f3c',
+    textAlign: 'center', marginTop: 4,
+  },
+  podiumRoll: {fontSize: 10, color: '#9ca3af', marginTop: 1},
+  podiumPct: {fontSize: 18, fontWeight: '700', color: '#B8960A', marginTop: 4},
+  podiumTrend: {fontSize: 10, color: '#8b7355', marginTop: 2},
+
   rankRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: '#ffffff', borderRadius: 12, padding: 12,
@@ -2250,6 +2869,105 @@ const styles = StyleSheet.create({
     fontSize: 10, color: '#b8a88a', textAlign: 'center',
     marginTop: 16, fontWeight: '500',
   },
+
+  // ── A4 EXPORT PAGES (p* styles) ──
+  // Parked far enough left that no page edge can bleed onto the real screen.
+  exportLayer: {position: 'absolute', left: -(PAGE_W + 80), top: 0, width: PAGE_W},
+  page: {
+    width: PAGE_W, height: PAGE_H, padding: PAGE_PAD,
+    backgroundColor: '#faf8f2', marginBottom: 20,
+  },
+  pHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#0d1f3c', borderRadius: 12,
+    paddingHorizontal: 18, paddingVertical: 12, marginBottom: 16,
+  },
+  pHeaderTitle: {fontSize: 20, fontWeight: '700', color: '#ffffff'},
+  pHeaderSub: {fontSize: 12, color: '#C9A84C', marginTop: 3},
+  pHeaderPage: {fontSize: 11, color: '#C9A84C', fontWeight: '600'},
+  pBody: {flex: 1},
+  pFooter: {
+    fontSize: 10, color: '#b8a88a', textAlign: 'center',
+    marginTop: 10, fontWeight: '500',
+  },
+
+  pSumGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14},
+  pSumCard: {
+    backgroundColor: '#ffffff', borderRadius: 12, padding: 10,
+    borderWidth: 1, borderColor: '#ece5d3', flexBasis: '31%', flexGrow: 1,
+  },
+  pSumLbl: {fontSize: 9, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.6},
+  pSumVal: {fontSize: 24, fontWeight: '700', marginTop: 3},
+  pSumSub: {fontSize: 10, color: '#b8a88a', marginTop: 2},
+
+  pCard: {
+    backgroundColor: '#ffffff', borderRadius: 12, padding: 16,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 14,
+  },
+  pCardTitle: {
+    fontSize: 12, fontWeight: '700', color: '#0d1f3c',
+    letterSpacing: 0.8, marginBottom: 12,
+  },
+  pDonutRow: {flexDirection: 'row', alignItems: 'center', gap: 22},
+  pLegend: {flex: 1, gap: 8},
+  pLegendRow: {flexDirection: 'row', alignItems: 'center', gap: 9},
+  pLegendDot: {width: 12, height: 12, borderRadius: 6},
+  pLegendLbl: {fontSize: 13, fontWeight: '600', color: '#0d1f3c', flex: 1},
+  pLegendRange: {fontSize: 11, color: '#9ca3af', fontWeight: '400'},
+  pLegendVal: {fontSize: 12, fontWeight: '700', color: '#4a3728'},
+
+  pAttnCard: {
+    backgroundColor: '#fef2f2', borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: '#fecaca', marginBottom: 14,
+  },
+  pAttnTitle: {
+    fontSize: 12, fontWeight: '700', color: '#b91c1c',
+    letterSpacing: 0.8, marginBottom: 8,
+  },
+  pAttnRow: {fontSize: 13, lineHeight: 18, marginTop: 2},
+  pAttnName: {fontSize: 13, fontWeight: '700', color: '#0d1f3c'},
+  pAttnReason: {fontSize: 12, color: '#b91c1c'},
+
+  pAiCard: {
+    backgroundColor: '#fdf8ee', borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: '#e8d5a3', marginBottom: 14,
+  },
+  pAiTitle: {
+    fontSize: 12, fontWeight: '700', color: '#B8960A',
+    letterSpacing: 0.8, marginBottom: 8,
+  },
+  pAiBody: {fontSize: 13, lineHeight: 18, color: '#4a3728'},
+
+  pPodiumRow: {flexDirection: 'row', gap: 10},
+  pPodiumCard: {
+    flex: 1, backgroundColor: '#ffffff', borderRadius: 12,
+    paddingVertical: 10, paddingHorizontal: 8,
+    borderWidth: 1, borderColor: '#e8d5a3', alignItems: 'center',
+  },
+  pPodiumMedal: {fontSize: 22},
+  pPodiumName: {fontSize: 13, fontWeight: '700', color: '#0d1f3c', marginTop: 3},
+  pPodiumRoll: {fontSize: 10, color: '#9ca3af', marginTop: 1},
+  pPodiumPct: {fontSize: 20, fontWeight: '700', color: '#B8960A', marginTop: 3},
+  pPodiumTrend: {fontSize: 10, color: '#8b7355', marginTop: 1},
+
+  pListTitle: {
+    fontSize: 12, fontWeight: '700', color: '#8b7355',
+    letterSpacing: 1, marginBottom: 10,
+  },
+  pRankRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    height: P_ROW_H, marginBottom: P_ROW_GAP, paddingHorizontal: 12,
+    backgroundColor: '#ffffff', borderRadius: 10,
+    borderWidth: 1, borderColor: '#ece5d3',
+  },
+  pRankNum: {fontSize: 14, fontWeight: '700', color: '#0d1f3c', width: 52},
+  pRankNumTop: {color: '#B8960A'},
+  pRankName: {fontSize: 14, fontWeight: '600', color: '#0d1f3c'},
+  pRankMeta: {fontSize: 11, color: '#9ca3af', marginTop: 1},
+  pRankPct: {fontSize: 16, fontWeight: '700', color: '#B8960A', width: 56, textAlign: 'right'},
+  pRankTrend: {fontSize: 14, width: 20, textAlign: 'center'},
+  pEmpty: {fontSize: 13, color: '#8b7355', textAlign: 'center', marginTop: 30},
+  pNoDataTxt: {fontSize: 12, color: '#8b7355', lineHeight: 18},
   className: {fontSize: 16, fontWeight: '700', color: '#0d1f3c'},
   summaryRow: {
     flexDirection: 'row', gap: 8, padding: 12,
