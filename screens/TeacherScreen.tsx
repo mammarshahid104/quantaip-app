@@ -65,6 +65,12 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 const bandFor = (pct: number) =>
   GRADE_BANDS.find(b => pct >= b.min) || GRADE_BANDS[GRADE_BANDS.length - 1];
 
+// "27/30" — the marks line printed under every percentage in the report.
+// Returns '' when there is nothing to total, so callers drop the line rather
+// than print a meaningless "0/0".
+const marksLabel = (obtained: any, outOf: any) =>
+  Number(outOf) > 0 ? `${Number(obtained) || 0}/${Number(outOf)}` : '';
+
 // ── A4 EXPORT GEOMETRY ──
 // Pages are laid out at PAGE_W × PAGE_H dp and captured at exactly 2× into a
 // 1240×1754 PNG, so the shared image is a high-res A4 document rather than a
@@ -858,6 +864,15 @@ QUANTAIP EduOS`;
       ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
       : 0;
 
+    // Raw marks aggregated over the same non-absent tests the average is built
+    // from, so the "67/75" shown next to a percentage always covers exactly the
+    // tests that percentage came from.
+    const obtained = entries.reduce((a, m) => a + (Number(m.obtained) || 0), 0);
+    const outOf = entries.reduce((a, m) => a + (Number(m.total) || 0), 0);
+    // The single test behind the high/low figures, for their own marks line.
+    const highEntry = pcts.length ? entries[pcts.indexOf(high)] : null;
+    const lowEntry = pcts.length ? entries[pcts.indexOf(low)] : null;
+
     // Trend compares the average of the earlier half against the later half.
     // trendDiff is kept numeric so the class report can rank by it.
     let trend = '';
@@ -876,7 +891,12 @@ QUANTAIP EduOS`;
     const absentCount = Object.values(student?.marksMap || {})
       .filter((m: any) => m.subject === subject && m.isAbsent).length;
 
-    return {entries, high, low, avg, trend, trendIcon, trendDiff, absentCount};
+    return {
+      entries, high, low, avg, trend, trendIcon, trendDiff, absentCount,
+      obtained, outOf,
+      highMarks: marksLabel(highEntry?.obtained, highEntry?.total),
+      lowMarks: marksLabel(lowEntry?.obtained, lowEntry?.total),
+    };
   };
 
   // ── CLASS PROGRESS REPORT ──
@@ -901,6 +921,9 @@ QUANTAIP EduOS`;
         name: s.fullName || s.name || 'Unknown',
         rollNo: s.rollNo || '—',
         avg: d.avg,
+        obtained: d.obtained,
+        outOf: d.outOf,
+        marks: marksLabel(d.obtained, d.outOf),
         taken: d.entries.length,
         // Anything the student has no score for — whether explicitly marked
         // absent or simply never recorded.
@@ -920,6 +943,14 @@ QUANTAIP EduOS`;
     const classAvg = ranked.length
       ? Math.round(ranked.reduce((a, r) => a + r.avg, 0) / ranked.length)
       : 0;
+
+    // Class-wide marks total: every ranked student's obtained/out-of summed.
+    // Deliberately a straight total of the sittings that happened — students
+    // who sat fewer tests contribute less to both sides of the fraction.
+    const classMarks = marksLabel(
+      ranked.reduce((a, r) => a + r.obtained, 0),
+      ranked.reduce((a, r) => a + r.outOf, 0),
+    );
 
     // Sittings, not students: how many student-test slots were actually taken
     // versus missed across the whole class for this subject.
@@ -994,6 +1025,7 @@ QUANTAIP EduOS`;
       noData,
       totalTests,
       classAvg,
+      classMarks,
       distribution,
       presentSittings,
       absentSittings,
@@ -1620,7 +1652,8 @@ QUANTAIP EduOS`;
                       STUDENTS — {progClass} · {progSubject}
                     </Text>
                     {progStudents.map((s, i) => {
-                      const {entries, avg} = progressData(s, progSubject);
+                      const {entries, avg, obtained, outOf} = progressData(s, progSubject);
+                      const aggMarks = marksLabel(obtained, outOf);
                       const hasNote = !!s?.teacherNotes?.[progSubject]?.note;
                       return (
                         <TouchableOpacity key={i} style={styles.progRow} onPress={() => openProgStudent(s)}>
@@ -1635,6 +1668,9 @@ QUANTAIP EduOS`;
                               {entries.length > 0
                                 ? `${entries.length} test(s) · avg ${avg}%`
                                 : 'No tests yet'}
+                              {aggMarks ? (
+                                <Text style={styles.progRowMarks}> · {aggMarks}</Text>
+                              ) : null}
                               {hasNote ? ' · 📝' : ''}
                             </Text>
                           </View>
@@ -1650,7 +1686,8 @@ QUANTAIP EduOS`;
           ) : (
             /* ── Single student's progress view ── */
             (() => {
-              const {entries, high, low, avg, trend, absentCount} =
+              const {entries, high, low, avg, trend, absentCount,
+                obtained, outOf, highMarks, lowMarks} =
                 progressData(progStudent, progSubject);
               const noteMeta = progStudent?.teacherNotes?.[progSubject];
               const updatedAt = noteMeta?.updatedAt?.toDate
@@ -1695,6 +1732,11 @@ QUANTAIP EduOS`;
                             return (
                               <View key={i} style={styles.chartCol}>
                                 <Text style={styles.chartPct}>{pct}%</Text>
+                                {marksLabel(m.obtained, m.total) ? (
+                                  <Text style={styles.chartMarks}>
+                                    {marksLabel(m.obtained, m.total)}
+                                  </Text>
+                                ) : null}
                                 <View style={styles.chartTrack}>
                                   <View style={[styles.chartBar, {
                                     height: Math.max(4, (pct / 100) * 120),
@@ -1717,12 +1759,17 @@ QUANTAIP EduOS`;
                   {entries.length > 0 && (
                     <View style={styles.statRow}>
                       {[
-                        {label: 'Highest', value: `${high}%`, color: '#16a34a'},
-                        {label: 'Lowest', value: `${low}%`, color: '#ef4444'},
-                        {label: 'Average', value: `${avg}%`, color: '#B8960A'},
+                        // Highest/Lowest quote the single test behind them;
+                        // Average quotes the total across every test taken.
+                        {label: 'Highest', value: `${high}%`, marks: highMarks, color: '#16a34a'},
+                        {label: 'Lowest', value: `${low}%`, marks: lowMarks, color: '#ef4444'},
+                        {label: 'Average', value: `${avg}%`, marks: marksLabel(obtained, outOf), color: '#B8960A'},
                       ].map((st, i) => (
                         <View key={i} style={styles.statBox}>
                           <Text style={[styles.statVal, {color: st.color}]}>{st.value}</Text>
+                          {st.marks ? (
+                            <Text style={styles.statMarks}>{st.marks}</Text>
+                          ) : null}
                           <Text style={styles.statLbl}>{st.label}</Text>
                         </View>
                       ))}
@@ -1813,15 +1860,18 @@ QUANTAIP EduOS`;
             {/* 2 — SUMMARY CARDS */}
             <View style={styles.sumGrid}>
               {[
-                {lbl: 'CLASS AVERAGE', val: `${rep.classAvg}%`, color: '#B8960A', sub: `${rep.ranked.length} student(s)`},
-                {lbl: 'HIGHEST', val: rep.highest ? `${rep.highest.avg}%` : '—', color: '#16a34a', sub: rep.highest?.name || ''},
-                {lbl: 'LOWEST', val: rep.lowest ? `${rep.lowest.avg}%` : '—', color: '#ef4444', sub: rep.lowest?.name || ''},
-                {lbl: 'PRESENT / ABSENT', val: `${rep.presentSittings} / ${rep.absentSittings}`, color: '#0d1f3c', sub: 'test sittings'},
-                {lbl: 'TESTS CONDUCTED', val: `${rep.totalTests}`, color: '#0d1f3c', sub: progSubject},
+                {lbl: 'CLASS AVERAGE', val: `${rep.classAvg}%`, marks: rep.classMarks, color: '#B8960A', sub: `${rep.ranked.length} student(s)`},
+                {lbl: 'HIGHEST', val: rep.highest ? `${rep.highest.avg}%` : '—', marks: rep.highest?.marks, color: '#16a34a', sub: rep.highest?.name || ''},
+                {lbl: 'LOWEST', val: rep.lowest ? `${rep.lowest.avg}%` : '—', marks: rep.lowest?.marks, color: '#ef4444', sub: rep.lowest?.name || ''},
+                {lbl: 'PRESENT / ABSENT', val: `${rep.presentSittings} / ${rep.absentSittings}`, marks: '', color: '#0d1f3c', sub: 'test sittings'},
+                {lbl: 'TESTS CONDUCTED', val: `${rep.totalTests}`, marks: '', color: '#0d1f3c', sub: progSubject},
               ].map((c, i) => (
                 <View key={i} style={styles.sumCard}>
                   <Text style={styles.sumLbl}>{c.lbl}</Text>
                   <Text style={[styles.sumVal, {color: c.color}]}>{c.val}</Text>
+                  {c.marks ? (
+                    <Text style={styles.sumMarks}>{c.marks}</Text>
+                  ) : null}
                   {c.sub ? (
                     <Text style={styles.sumSub} numberOfLines={1}>{c.sub}</Text>
                   ) : null}
@@ -1868,7 +1918,15 @@ QUANTAIP EduOS`;
                       <Text style={styles.attnName}>{r.name}</Text>
                       <Text style={styles.attnReason}>{r.reason}</Text>
                     </View>
-                    <Text style={styles.attnRoll}>Roll {r.rollNo}</Text>
+                    {/* The reason line already carries the percentage, so the
+                        right column adds the marks behind it rather than
+                        repeating the figure. */}
+                    <View style={styles.attnRight}>
+                      {r.marks ? (
+                        <Text style={styles.attnMarks}>{r.marks}</Text>
+                      ) : null}
+                      <Text style={styles.attnRoll}>Roll {r.rollNo}</Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1904,6 +1962,9 @@ QUANTAIP EduOS`;
                       <Text style={styles.podiumName} numberOfLines={2}>{r.name}</Text>
                       <Text style={styles.podiumRoll}>Roll {r.rollNo}</Text>
                       <Text style={styles.podiumPct}>{r.avg}%</Text>
+                      {r.marks ? (
+                        <Text style={styles.podiumMarks}>{r.marks}</Text>
+                      ) : null}
                       <Text style={styles.podiumTrend}>{r.trend || '—'}</Text>
                     </TouchableOpacity>
                   ))}
@@ -1937,7 +1998,12 @@ QUANTAIP EduOS`;
                       </Text>
                     </View>
                     <View style={styles.rankRight}>
-                      <Text style={styles.rankPct}>{r.avg}%</Text>
+                      <View style={styles.rankScore}>
+                        <Text style={styles.rankPct}>{r.avg}%</Text>
+                        {r.marks ? (
+                          <Text style={styles.rankMarks}>{r.marks}</Text>
+                        ) : null}
+                      </View>
                       {r.trendIcon ? <Text style={styles.rankTrend}>{r.trendIcon}</Text> : null}
                     </View>
                   </TouchableOpacity>
@@ -2440,15 +2506,18 @@ QUANTAIP EduOS`;
                     {/* Summary cards — 3 up, then 2 up */}
                     <View style={styles.pSumGrid}>
                       {[
-                        {lbl: 'CLASS AVERAGE', val: `${rep.classAvg}%`, color: '#B8960A', sub: `${rep.ranked.length} student(s)`},
-                        {lbl: 'HIGHEST', val: rep.highest ? `${rep.highest.avg}%` : '—', color: '#16a34a', sub: rep.highest?.name || ''},
-                        {lbl: 'LOWEST', val: rep.lowest ? `${rep.lowest.avg}%` : '—', color: '#ef4444', sub: rep.lowest?.name || ''},
-                        {lbl: 'PRESENT / ABSENT', val: `${rep.presentSittings} / ${rep.absentSittings}`, color: '#0d1f3c', sub: 'test sittings'},
-                        {lbl: 'TESTS CONDUCTED', val: `${rep.totalTests}`, color: '#0d1f3c', sub: progSubject},
+                        {lbl: 'CLASS AVERAGE', val: `${rep.classAvg}%`, marks: rep.classMarks, color: '#B8960A', sub: `${rep.ranked.length} student(s)`},
+                        {lbl: 'HIGHEST', val: rep.highest ? `${rep.highest.avg}%` : '—', marks: rep.highest?.marks, color: '#16a34a', sub: rep.highest?.name || ''},
+                        {lbl: 'LOWEST', val: rep.lowest ? `${rep.lowest.avg}%` : '—', marks: rep.lowest?.marks, color: '#ef4444', sub: rep.lowest?.name || ''},
+                        {lbl: 'PRESENT / ABSENT', val: `${rep.presentSittings} / ${rep.absentSittings}`, marks: '', color: '#0d1f3c', sub: 'test sittings'},
+                        {lbl: 'TESTS CONDUCTED', val: `${rep.totalTests}`, marks: '', color: '#0d1f3c', sub: progSubject},
                       ].map((c, k) => (
                         <View key={k} style={styles.pSumCard}>
                           <Text style={styles.pSumLbl}>{c.lbl}</Text>
                           <Text style={[styles.pSumVal, {color: c.color}]}>{c.val}</Text>
+                          {c.marks ? (
+                            <Text style={styles.pSumMarks}>{c.marks}</Text>
+                          ) : null}
                           {c.sub ? (
                             <Text style={styles.pSumSub} numberOfLines={1}>{c.sub}</Text>
                           ) : null}
@@ -2461,8 +2530,8 @@ QUANTAIP EduOS`;
                       <Text style={styles.pCardTitle}>GRADE DISTRIBUTION</Text>
                       <View style={styles.pDonutRow}>
                         <GradeDonut
-                          size={144}
-                          stroke={26}
+                          size={132}
+                          stroke={24}
                           bands={rep.distribution}
                           total={rep.ranked.length}
                         />
@@ -2490,6 +2559,9 @@ QUANTAIP EduOS`;
                           <Text key={k} style={styles.pAttnRow} numberOfLines={1}>
                             <Text style={styles.pAttnName}>{r.name}</Text>
                             <Text style={styles.pAttnReason}>  — {r.reason}</Text>
+                            {r.marks ? (
+                              <Text style={styles.pAttnMarks}>  {r.marks}</Text>
+                            ) : null}
                           </Text>
                         ))}
                       </View>
@@ -2514,6 +2586,9 @@ QUANTAIP EduOS`;
                             <Text style={styles.pPodiumName} numberOfLines={1}>{r.name}</Text>
                             <Text style={styles.pPodiumRoll}>Roll {r.rollNo}</Text>
                             <Text style={styles.pPodiumPct}>{r.avg}%</Text>
+                            {r.marks ? (
+                              <Text style={styles.pPodiumMarks}>{r.marks}</Text>
+                            ) : null}
                             <Text style={styles.pPodiumTrend}>{r.trend || '—'}</Text>
                           </View>
                         ))}
@@ -2546,7 +2621,15 @@ QUANTAIP EduOS`;
                                 Roll No: {r.rollNo} · {r.taken}/{rep.totalTests} tests
                               </Text>
                             </View>
-                            <Text style={styles.pRankPct}>{r.avg}%</Text>
+                            {/* Kept on one line — export rows are a fixed
+                                P_ROW_H tall and the pagination maths depends
+                                on that height not changing. */}
+                            <View style={styles.pRankScore}>
+                              <Text style={styles.pRankPct}>{r.avg}%</Text>
+                              {r.marks ? (
+                                <Text style={styles.pRankMarks}>· {r.marks}</Text>
+                              ) : null}
+                            </View>
                             <Text style={styles.pRankTrend}>{r.trendIcon || ''}</Text>
                           </View>
                         );
@@ -2719,8 +2802,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#ece5d3', marginBottom: 12,
   },
   chartRow: {flexDirection: 'row', alignItems: 'flex-end', gap: 14},
-  chartCol: {alignItems: 'center', width: 62},
-  chartPct: {fontSize: 11, fontWeight: '700', color: '#0d1f3c', marginBottom: 4},
+  chartCol: {alignItems: 'center', width: 66},
+  chartPct: {fontSize: 13, fontWeight: '700', color: '#0d1f3c', marginBottom: 1},
+  chartMarks: {fontSize: 11, fontWeight: '600', color: '#4a3728', marginBottom: 3},
   chartTrack: {
     height: 120, width: 26, justifyContent: 'flex-end',
     backgroundColor: '#faf8f2', borderRadius: 6, overflow: 'hidden',
@@ -2737,6 +2821,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#ece5d3', alignItems: 'center',
   },
   statVal: {fontSize: 17, fontWeight: '700'},
+  statMarks: {fontSize: 14, fontWeight: '600', color: '#0d1f3c', marginTop: 1},
   statLbl: {fontSize: 10, color: '#9ca3af', fontWeight: '600', marginTop: 2},
   trendBox: {
     backgroundColor: '#fdf8ee', borderRadius: 12, padding: 12,
@@ -2788,6 +2873,9 @@ const styles = StyleSheet.create({
   },
   sumLbl: {fontSize: 9, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.6},
   sumVal: {fontSize: 20, fontWeight: '700', marginTop: 4},
+  // Marks line under every percentage — navy and semi-bold so it reads as a
+  // second figure, not as caption text like sumSub.
+  sumMarks: {fontSize: 14, fontWeight: '600', color: '#0d1f3c', marginTop: 1},
   sumSub: {fontSize: 10, color: '#b8a88a', marginTop: 2},
 
   card: {
@@ -2816,7 +2904,9 @@ const styles = StyleSheet.create({
   },
   attnName: {fontSize: 13, fontWeight: '700', color: '#0d1f3c'},
   attnReason: {fontSize: 11, color: '#b91c1c', marginTop: 2},
-  attnRoll: {fontSize: 10, color: '#9ca3af', fontWeight: '600'},
+  attnRight: {alignItems: 'flex-end'},
+  attnMarks: {fontSize: 14, fontWeight: '600', color: '#0d1f3c'},
+  attnRoll: {fontSize: 10, color: '#9ca3af', fontWeight: '600', marginTop: 1},
 
   aiCard: {
     backgroundColor: '#fdf8ee', borderRadius: 14, padding: 14,
@@ -2843,6 +2933,7 @@ const styles = StyleSheet.create({
   },
   podiumRoll: {fontSize: 10, color: '#9ca3af', marginTop: 1},
   podiumPct: {fontSize: 18, fontWeight: '700', color: '#B8960A', marginTop: 4},
+  podiumMarks: {fontSize: 14, fontWeight: '600', color: '#0d1f3c', marginTop: 1},
   podiumTrend: {fontSize: 10, color: '#8b7355', marginTop: 2},
 
   rankRow: {
@@ -2856,8 +2947,11 @@ const styles = StyleSheet.create({
   rankName: {fontSize: 14, fontWeight: '600', color: '#0d1f3c'},
   rankMeta: {fontSize: 11, color: '#9ca3af', marginTop: 2},
   rankRight: {flexDirection: 'row', alignItems: 'center', gap: 6},
+  rankScore: {alignItems: 'flex-end'},
   rankPct: {fontSize: 16, fontWeight: '700', color: '#B8960A'},
+  rankMarks: {fontSize: 14, fontWeight: '600', color: '#0d1f3c', marginTop: 1},
   rankTrend: {fontSize: 13},
+  progRowMarks: {fontSize: 13, fontWeight: '600', color: '#0d1f3c'},
   noDataRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     backgroundColor: '#faf8f2', borderRadius: 10, padding: 11,
@@ -2891,18 +2985,23 @@ const styles = StyleSheet.create({
     marginTop: 10, fontWeight: '500',
   },
 
-  pSumGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14},
+  // Page 1 is a fixed height with no room to grow, so the marks lines added to
+  // the summary cards and the podium are paid for by trimming the value font
+  // sizes, the card paddings and the doughnut — page 1 nets out slightly
+  // shorter than it was without them.
+  pSumGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10},
   pSumCard: {
     backgroundColor: '#ffffff', borderRadius: 12, padding: 10,
     borderWidth: 1, borderColor: '#ece5d3', flexBasis: '31%', flexGrow: 1,
   },
   pSumLbl: {fontSize: 9, fontWeight: '700', color: '#9ca3af', letterSpacing: 0.6},
-  pSumVal: {fontSize: 24, fontWeight: '700', marginTop: 3},
+  pSumVal: {fontSize: 21, fontWeight: '700', marginTop: 3},
+  pSumMarks: {fontSize: 15, fontWeight: '600', color: '#0d1f3c', marginTop: 1},
   pSumSub: {fontSize: 10, color: '#b8a88a', marginTop: 2},
 
   pCard: {
-    backgroundColor: '#ffffff', borderRadius: 12, padding: 16,
-    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 14,
+    backgroundColor: '#ffffff', borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: '#ece5d3', marginBottom: 10,
   },
   pCardTitle: {
     fontSize: 12, fontWeight: '700', color: '#0d1f3c',
@@ -2918,7 +3017,7 @@ const styles = StyleSheet.create({
 
   pAttnCard: {
     backgroundColor: '#fef2f2', borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: '#fecaca', marginBottom: 14,
+    borderWidth: 1, borderColor: '#fecaca', marginBottom: 10,
   },
   pAttnTitle: {
     fontSize: 12, fontWeight: '700', color: '#b91c1c',
@@ -2927,10 +3026,11 @@ const styles = StyleSheet.create({
   pAttnRow: {fontSize: 13, lineHeight: 18, marginTop: 2},
   pAttnName: {fontSize: 13, fontWeight: '700', color: '#0d1f3c'},
   pAttnReason: {fontSize: 12, color: '#b91c1c'},
+  pAttnMarks: {fontSize: 13, fontWeight: '600', color: '#0d1f3c'},
 
   pAiCard: {
     backgroundColor: '#fdf8ee', borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: '#e8d5a3', marginBottom: 14,
+    borderWidth: 1, borderColor: '#e8d5a3', marginBottom: 10,
   },
   pAiTitle: {
     fontSize: 12, fontWeight: '700', color: '#B8960A',
@@ -2941,13 +3041,14 @@ const styles = StyleSheet.create({
   pPodiumRow: {flexDirection: 'row', gap: 10},
   pPodiumCard: {
     flex: 1, backgroundColor: '#ffffff', borderRadius: 12,
-    paddingVertical: 10, paddingHorizontal: 8,
+    paddingVertical: 8, paddingHorizontal: 8,
     borderWidth: 1, borderColor: '#e8d5a3', alignItems: 'center',
   },
   pPodiumMedal: {fontSize: 22},
   pPodiumName: {fontSize: 13, fontWeight: '700', color: '#0d1f3c', marginTop: 3},
   pPodiumRoll: {fontSize: 10, color: '#9ca3af', marginTop: 1},
-  pPodiumPct: {fontSize: 20, fontWeight: '700', color: '#B8960A', marginTop: 3},
+  pPodiumPct: {fontSize: 19, fontWeight: '700', color: '#B8960A', marginTop: 3},
+  pPodiumMarks: {fontSize: 15, fontWeight: '600', color: '#0d1f3c', marginTop: 1},
   pPodiumTrend: {fontSize: 10, color: '#8b7355', marginTop: 1},
 
   pListTitle: {
@@ -2964,7 +3065,12 @@ const styles = StyleSheet.create({
   pRankNumTop: {color: '#B8960A'},
   pRankName: {fontSize: 14, fontWeight: '600', color: '#0d1f3c'},
   pRankMeta: {fontSize: 11, color: '#9ca3af', marginTop: 1},
-  pRankPct: {fontSize: 16, fontWeight: '700', color: '#B8960A', width: 56, textAlign: 'right'},
+  pRankScore: {
+    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'flex-end',
+    gap: 6, width: 140,
+  },
+  pRankPct: {fontSize: 16, fontWeight: '700', color: '#B8960A'},
+  pRankMarks: {fontSize: 14, fontWeight: '600', color: '#0d1f3c'},
   pRankTrend: {fontSize: 14, width: 20, textAlign: 'center'},
   pEmpty: {fontSize: 13, color: '#8b7355', textAlign: 'center', marginTop: 30},
   pNoDataTxt: {fontSize: 12, color: '#8b7355', lineHeight: 18},
