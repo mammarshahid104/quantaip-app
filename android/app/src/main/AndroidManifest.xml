@@ -1,6 +1,15 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Merged in transitively by Play Services / Firebase Analytics. The app
+         shows no ads and reads no advertising ID, so strip them rather than
+         declare advertising-ID collection in the Play Data Safety form. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_AD_ID"
+        tools:node="remove" />
 
     <!-- Needed so Linking.canOpenURL('whatsapp://...') works on Android 11+ (API 30) -->
     <queries>
