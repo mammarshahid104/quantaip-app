@@ -36,6 +36,7 @@ import {
 
 import {getSchoolCode} from '../config';
 import {theme} from '../theme';
+import {confirmSignOut} from '../services/signOut';
 import {generateClassInsight, ClassInsightStats} from '../services/aiInsight';
 
 const TEST_TYPES = [
@@ -88,12 +89,14 @@ const P_ROW_H = 40;
 const P_ROW_GAP = 5;
 // Everything on a list page that isn't a row. These match the paddings and
 // font sizes in the p* styles below — change one and change the other.
-const P_HEADER_H = 84; // navy strip + its margin
+// navy strip + its margin. Three text lines now: title, report/school/date,
+// and the test-scope line — 84 was the two-line figure.
+const P_HEADER_H = 102;
 const P_FOOTER_H = 24;
 const P_LIST_TITLE_H = 23;
 const P_LIST_SPACE =
   PAGE_H - PAGE_PAD * 2 - P_HEADER_H - P_FOOTER_H - P_LIST_TITLE_H;
-const ROWS_PER_PAGE = Math.floor(P_LIST_SPACE / (P_ROW_H + P_ROW_GAP)); // 15
+const ROWS_PER_PAGE = Math.floor(P_LIST_SPACE / (P_ROW_H + P_ROW_GAP)); // 14
 
 // Doughnut chart. Each band is one <Circle> on a shared ring: strokeDasharray
 // draws an arc of the band's length, and strokeDashoffset slides that arc to
@@ -480,6 +483,11 @@ export default function TeacherScreen({navigation}: any) {
   const [loadingProgStudents, setLoadingProgStudents] = useState(false);
   const [progStudent, setProgStudent] = useState<any>(null);
   const [showClassReport, setShowClassReport] = useState(false);
+  // Which tests the progress views cover. Off by default: the report opens on
+  // the latest test alone, because "how did the class do on the test I just
+  // marked" is the question being asked 90% of the time. Turning it on widens
+  // every figure — averages, ranking, chart, trend — back to the full history.
+  const [showHistory, setShowHistory] = useState(false);
   const [sharingReport, setSharingReport] = useState(false);
   const [refreshingReport, setRefreshingReport] = useState(false);
   // Export pages are only mounted while a share is in flight; these refs are
@@ -802,6 +810,7 @@ QUANTAIP EduOS`;
     setProgStudents([]);
     setProgStudent(null);
     setShowClassReport(false);
+    setShowHistory(false);
     setLoadingProgSubjects(true);
     try {
       const doc = await firestore()
@@ -829,6 +838,7 @@ QUANTAIP EduOS`;
     setProgSubject(subject);
     setProgStudent(null);
     setShowClassReport(false);
+    setShowHistory(false);
     setLoadingProgStudents(true);
     try {
       const snapshot = await firestore()
@@ -850,11 +860,44 @@ QUANTAIP EduOS`;
     setNoteText(s?.teacherNotes?.[progSubject]?.note || '');
   };
 
+  // A readable name for one mark entry — "Mid Term", "Weekly Test", …
+  const testName = (m: any) =>
+    m?.typeName || TEST_TYPES.find(t => t.key === m?.testType)?.label || m?.testType || 'Test';
+
+  // The most recent test the *class* sat in this subject. Deliberately taken
+  // across every student rather than per-student, so "current test only" ranks
+  // everyone on the same paper — a student who was absent for it shows as
+  // missing rather than silently being scored on an older test.
+  // Absent entries count for identifying the test; they just carry no score.
+  const latestTest = useMemo(() => {
+    let best: any = null;
+    progStudents.forEach(s => {
+      Object.values(s?.marksMap || {}).forEach((m: any) => {
+        if (m?.subject !== progSubject || !m?.testId) return;
+        if (!best || String(m.date || '').localeCompare(String(best.date || '')) > 0) {
+          best = m;
+        }
+      });
+    });
+    return best
+      ? {testId: best.testId as string, date: String(best.date || ''), name: testName(best)}
+      : null;
+  }, [progStudents, progSubject]);
+
+  // null = every test; a testId = that one test only. Marks saved before
+  // testId existed produce no latestTest, so those classes fall back to the
+  // old full-history behaviour rather than showing a blank report.
+  const scopeTestId = showHistory ? null : latestTest?.testId || null;
+
   // Chronological test history for one student in one subject. Absent tests are
   // left out entirely — plotting them as 0 would invent a score.
-  const progressData = (student: any, subject: string) => {
+  // `onlyTestId` narrows the whole calculation to a single test, which is what
+  // the default "current marks only" view runs on.
+  const progressData = (student: any, subject: string, onlyTestId?: string | null) => {
     const entries = Object.values(student?.marksMap || {})
-      .filter((m: any) => m.subject === subject && !m.isAbsent)
+      .filter((m: any) =>
+        m.subject === subject && !m.isAbsent &&
+        (!onlyTestId || m.testId === onlyTestId))
       .sort((a: any, b: any) => String(a.date || '').localeCompare(String(b.date || ''))) as any[];
 
     const pcts = entries.map(m => m.percentage || 0);
@@ -889,7 +932,9 @@ QUANTAIP EduOS`;
     }
 
     const absentCount = Object.values(student?.marksMap || {})
-      .filter((m: any) => m.subject === subject && m.isAbsent).length;
+      .filter((m: any) =>
+        m.subject === subject && m.isAbsent &&
+        (!onlyTestId || m.testId === onlyTestId)).length;
 
     return {
       entries, high, low, avg, trend, trendIcon, trendDiff, absentCount,
@@ -905,17 +950,20 @@ QUANTAIP EduOS`;
   // than ranked at 0%. Memoised because every section of the report screen —
   // and every A4 export page — reads from this one object.
   const rep = useMemo(() => {
-    // Denominator for "4/5 tests" — every test the class sat in this subject.
+    // Denominator for "4/5 tests" — every test the class sat in this subject,
+    // or just the current one while history is hidden.
     const allTestIds = new Set<string>();
     progStudents.forEach(s => {
       Object.values(s?.marksMap || {}).forEach((m: any) => {
-        if (m.subject === progSubject && m.testId) allTestIds.add(m.testId);
+        if (m.subject !== progSubject || !m.testId) return;
+        if (scopeTestId && m.testId !== scopeTestId) return;
+        allTestIds.add(m.testId);
       });
     });
     const totalTests = allTestIds.size;
 
     const rows = progStudents.map(s => {
-      const d = progressData(s, progSubject);
+      const d = progressData(s, progSubject, scopeTestId);
       return {
         student: s,
         name: s.fullName || s.name || 'Unknown',
@@ -1039,7 +1087,7 @@ QUANTAIP EduOS`;
     };
     // progressData is a pure helper over its arguments, so the inputs below are
     // the only things that can change the result.
-  }, [progStudents, progSubject]);
+  }, [progStudents, progSubject, scopeTestId]);
 
   // Kept in a ref so the insight effect can read the latest figures without
   // re-running every time an unrelated part of the report recomputes.
@@ -1054,7 +1102,9 @@ QUANTAIP EduOS`;
       const sub = progSubject;
       if (!cls || !sub) return;
 
-      const key = `${cls}|${sub}`;
+      // Scope is part of the key: the latest-test-only figures and the
+      // full-history figures deserve their own insight, not each other's.
+      const key = `${cls}|${sub}|${scopeTestId || 'all'}`;
       if (!force && insightCache.current[key]) {
         setInsight(insightCache.current[key]);
         return;
@@ -1088,7 +1138,7 @@ QUANTAIP EduOS`;
         setInsightLoading(false);
       }
     },
-    [progClass, progSubject],
+    [progClass, progSubject, scopeTestId],
   );
 
   // Opening the report loads the insight once; the cache keeps every later
@@ -1226,6 +1276,42 @@ QUANTAIP EduOS`;
   const late = Object.values(attendance).filter(v => v === 'L').length;
   const allMarked = attStudents.length > 0 && Object.keys(attendance).length === attStudents.length;
 
+  // One line saying exactly which tests the numbers on screen cover, so a
+  // percentage is never ambiguous about what it averages.
+  const scopeLabel = showHistory
+    ? `All tests · ${rep.totalTests} recorded`
+    : latestTest
+      ? `Current test — ${latestTest.name}${latestTest.date ? ` · ${latestTest.date}` : ''}`
+      : 'No tests recorded yet';
+
+  // Report summary cards, shared by the on-screen report and the A4 export so
+  // the printed page can never drift from what the teacher just looked at.
+  // The last card swaps identity with the scope: a test count only says
+  // something once more than one test is in play.
+  const sumCards = [
+    {lbl: 'CLASS AVERAGE', val: `${rep.classAvg}%`, marks: rep.classMarks, color: '#B8960A', sub: `${rep.ranked.length} student(s)`},
+    {lbl: 'HIGHEST', val: rep.highest ? `${rep.highest.avg}%` : '—', marks: rep.highest?.marks, color: '#16a34a', sub: rep.highest?.name || ''},
+    {lbl: 'LOWEST', val: rep.lowest ? `${rep.lowest.avg}%` : '—', marks: rep.lowest?.marks, color: '#ef4444', sub: rep.lowest?.name || ''},
+    {lbl: 'PRESENT / ABSENT', val: `${rep.presentSittings} / ${rep.absentSittings}`, marks: '', color: '#0d1f3c', sub: 'test sittings'},
+    showHistory
+      ? {lbl: 'TESTS CONDUCTED', val: `${rep.totalTests}`, marks: '', color: '#0d1f3c', sub: progSubject}
+      : {lbl: 'CURRENT TEST', val: latestTest?.name || '—', marks: '', color: '#0d1f3c', sub: latestTest?.date || progSubject},
+  ];
+
+  // The same control in all three progress views. The label says what tapping
+  // it will do, not what is on screen now.
+  const historyToggle = (
+    <TouchableOpacity
+      style={[styles.histToggle, showHistory && styles.histToggleOn]}
+      onPress={() => setShowHistory(!showHistory)}
+      activeOpacity={0.8}>
+      <ClockIcon size={15} color={showHistory ? '#C9A84C' : '#B8960A'} />
+      <Text style={[styles.histToggleTxt, showHistory && styles.histToggleTxtOn]}>
+        {showHistory ? 'Show Current Test Only' : 'Show Previous Tests'}
+      </Text>
+    </TouchableOpacity>
+  );
+
   const TABS = [
     ...(inchargeClasses.length > 0 ? [{key: 'Attendance', icon: ClipboardDocumentCheckIcon}] : []),
     {key: 'Marks', icon: PencilSquareIcon},
@@ -1246,7 +1332,7 @@ QUANTAIP EduOS`;
           <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
           <Text style={styles.navSub}>TEACHER PANEL</Text>
         </View>
-        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
+        <TouchableOpacity onPress={() => confirmSignOut(navigation)}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>
@@ -1648,13 +1734,25 @@ QUANTAIP EduOS`;
                       <Text style={styles.classReportBtnTxt}>View Class Report</Text>
                     </TouchableOpacity>
 
+                    {historyToggle}
+                    <Text style={styles.scopeLine}>{scopeLabel}</Text>
+
                     <Text style={styles.fieldLabel}>
                       STUDENTS — {progClass} · {progSubject}
                     </Text>
                     {progStudents.map((s, i) => {
-                      const {entries, avg, obtained, outOf} = progressData(s, progSubject);
+                      const {entries, avg, obtained, outOf} =
+                        progressData(s, progSubject, scopeTestId);
                       const aggMarks = marksLabel(obtained, outOf);
                       const hasNote = !!s?.teacherNotes?.[progSubject]?.note;
+                      const summary =
+                        entries.length === 0
+                          ? showHistory || !latestTest
+                            ? 'No tests yet'
+                            : 'No score in current test'
+                          : showHistory
+                            ? `${entries.length} test(s) · avg ${avg}%`
+                            : `${latestTest?.name} · ${avg}%`;
                       return (
                         <TouchableOpacity key={i} style={styles.progRow} onPress={() => openProgStudent(s)}>
                           <View style={styles.studentAv}>
@@ -1665,9 +1763,7 @@ QUANTAIP EduOS`;
                           <View style={styles.studentInfo}>
                             <Text style={styles.studentName}>{s.fullName || s.name}</Text>
                             <Text style={styles.studentRoll}>
-                              {entries.length > 0
-                                ? `${entries.length} test(s) · avg ${avg}%`
-                                : 'No tests yet'}
+                              {summary}
                               {aggMarks ? (
                                 <Text style={styles.progRowMarks}> · {aggMarks}</Text>
                               ) : null}
@@ -1686,9 +1782,14 @@ QUANTAIP EduOS`;
           ) : (
             /* ── Single student's progress view ── */
             (() => {
+              // Scoped figures drive everything on screen; the unscoped set is
+              // read only to say how many earlier tests the toggle would add.
               const {entries, high, low, avg, trend, absentCount,
                 obtained, outOf, highMarks, lowMarks} =
-                progressData(progStudent, progSubject);
+                progressData(progStudent, progSubject, scopeTestId);
+              const allEntries = progressData(progStudent, progSubject).entries;
+              const earlierCount = Math.max(0, allEntries.length - entries.length);
+              const currentEntry = entries.length ? entries[entries.length - 1] : null;
               const noteMeta = progStudent?.teacherNotes?.[progSubject];
               const updatedAt = noteMeta?.updatedAt?.toDate
                 ? noteMeta.updatedAt.toDate()
@@ -1713,15 +1814,50 @@ QUANTAIP EduOS`;
                     </Text>
                   </View>
 
+                  {/* Scope control — the graph below is the history view, so
+                      this toggle just widens what it plots. */}
+                  {historyToggle}
+                  <Text style={styles.scopeLine}>
+                    {scopeLabel}
+                    {!showHistory && earlierCount > 0
+                      ? ` · ${earlierCount} earlier test(s) hidden`
+                      : ''}
+                  </Text>
+
+                  {/* Current test at a glance — the default view. One test, so
+                      a chart would be a single bar; the card says it plainer. */}
+                  {!showHistory && currentEntry ? (
+                    <View style={styles.currentCard}>
+                      <Text style={styles.currentLbl}>CURRENT TEST</Text>
+                      <Text style={styles.currentName}>{testName(currentEntry)}</Text>
+                      <Text style={styles.currentPct}>{currentEntry.percentage || 0}%</Text>
+                      {marksLabel(currentEntry.obtained, currentEntry.total) ? (
+                        <Text style={styles.currentMarks}>
+                          {marksLabel(currentEntry.obtained, currentEntry.total)}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.currentMeta}>
+                        Grade {bandFor(currentEntry.percentage || 0).label}
+                        {currentEntry.date ? ` · ${currentEntry.date}` : ''}
+                      </Text>
+                    </View>
+                  ) : null}
+
                   {/* Bar chart — plain Views, heights proportional to percentage */}
                   {entries.length === 0 ? (
                     <View style={styles.progEmpty}>
                       <ChartBarIcon size={34} color="#b8a88a" />
                       <Text style={styles.progEmptyTxt}>
-                        No marks recorded for {progSubject} yet.
+                        {showHistory || !latestTest
+                          ? `No marks recorded for ${progSubject} yet.`
+                          : `No score in the current test (${latestTest.name}).${
+                              earlierCount > 0
+                                ? ' Tap "Show Previous Tests" to see earlier results.'
+                                : ''
+                            }`}
                       </Text>
                     </View>
-                  ) : (
+                  ) : !showHistory ? null : (
                     <View style={styles.chartCard}>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                         <View style={styles.chartRow}>
@@ -1755,8 +1891,9 @@ QUANTAIP EduOS`;
                     </View>
                   )}
 
-                  {/* Summary stats */}
-                  {entries.length > 0 && (
+                  {/* Summary stats — only meaningful over a history; with one
+                      test highest/lowest/average are all the same number. */}
+                  {showHistory && entries.length > 0 && (
                     <View style={styles.statRow}>
                       {[
                         // Highest/Lowest quote the single test behind them;
@@ -1855,20 +1992,22 @@ QUANTAIP EduOS`;
               <Text style={styles.reportSub}>
                 {rep.ranked.length} student(s) ranked · {rep.totalTests} test(s)
               </Text>
+              <Text style={styles.reportScope}>{scopeLabel}</Text>
             </View>
+
+            {/* 1b — TEST SCOPE TOGGLE
+                The report opens on the latest test only; this widens every
+                figure below it to the full history. */}
+            {historyToggle}
 
             {/* 2 — SUMMARY CARDS */}
             <View style={styles.sumGrid}>
-              {[
-                {lbl: 'CLASS AVERAGE', val: `${rep.classAvg}%`, marks: rep.classMarks, color: '#B8960A', sub: `${rep.ranked.length} student(s)`},
-                {lbl: 'HIGHEST', val: rep.highest ? `${rep.highest.avg}%` : '—', marks: rep.highest?.marks, color: '#16a34a', sub: rep.highest?.name || ''},
-                {lbl: 'LOWEST', val: rep.lowest ? `${rep.lowest.avg}%` : '—', marks: rep.lowest?.marks, color: '#ef4444', sub: rep.lowest?.name || ''},
-                {lbl: 'PRESENT / ABSENT', val: `${rep.presentSittings} / ${rep.absentSittings}`, marks: '', color: '#0d1f3c', sub: 'test sittings'},
-                {lbl: 'TESTS CONDUCTED', val: `${rep.totalTests}`, marks: '', color: '#0d1f3c', sub: progSubject},
-              ].map((c, i) => (
+              {sumCards.map((c, i) => (
                 <View key={i} style={styles.sumCard}>
                   <Text style={styles.sumLbl}>{c.lbl}</Text>
-                  <Text style={[styles.sumVal, {color: c.color}]}>{c.val}</Text>
+                  <Text style={[styles.sumVal, {color: c.color}]} numberOfLines={1}>
+                    {c.val}
+                  </Text>
                   {c.marks ? (
                     <Text style={styles.sumMarks}>{c.marks}</Text>
                   ) : null}
@@ -2494,6 +2633,9 @@ QUANTAIP EduOS`;
                   <Text style={styles.pHeaderSub}>
                     Class Progress Report · {schoolName || getSchoolCode()} · {today}
                   </Text>
+                  {/* Whoever the page is forwarded to has to be able to tell
+                      one test from a whole term at a glance. */}
+                  <Text style={styles.pHeaderSub}>{scopeLabel}</Text>
                 </View>
                 <Text style={styles.pHeaderPage}>
                   Page {i + 1} of {exportPages.length}
@@ -2505,16 +2647,12 @@ QUANTAIP EduOS`;
                   <>
                     {/* Summary cards — 3 up, then 2 up */}
                     <View style={styles.pSumGrid}>
-                      {[
-                        {lbl: 'CLASS AVERAGE', val: `${rep.classAvg}%`, marks: rep.classMarks, color: '#B8960A', sub: `${rep.ranked.length} student(s)`},
-                        {lbl: 'HIGHEST', val: rep.highest ? `${rep.highest.avg}%` : '—', marks: rep.highest?.marks, color: '#16a34a', sub: rep.highest?.name || ''},
-                        {lbl: 'LOWEST', val: rep.lowest ? `${rep.lowest.avg}%` : '—', marks: rep.lowest?.marks, color: '#ef4444', sub: rep.lowest?.name || ''},
-                        {lbl: 'PRESENT / ABSENT', val: `${rep.presentSittings} / ${rep.absentSittings}`, marks: '', color: '#0d1f3c', sub: 'test sittings'},
-                        {lbl: 'TESTS CONDUCTED', val: `${rep.totalTests}`, marks: '', color: '#0d1f3c', sub: progSubject},
-                      ].map((c, k) => (
+                      {sumCards.map((c, k) => (
                         <View key={k} style={styles.pSumCard}>
                           <Text style={styles.pSumLbl}>{c.lbl}</Text>
-                          <Text style={[styles.pSumVal, {color: c.color}]}>{c.val}</Text>
+                          <Text style={[styles.pSumVal, {color: c.color}]} numberOfLines={1}>
+                            {c.val}
+                          </Text>
                           {c.marks ? (
                             <Text style={styles.pSumMarks}>{c.marks}</Text>
                           ) : null}
@@ -2775,6 +2913,27 @@ const styles = StyleSheet.create({
   },
   backLink: {fontSize: 13, color: '#B8960A', fontWeight: '600'},
   // ── PROGRESS TAB ──
+  // Test-scope toggle: outlined while showing the current test only, filled
+  // navy once the full history is on, so the widened state is obvious.
+  histToggle: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e8d5a3',
+    borderRadius: 10, paddingVertical: 11, paddingHorizontal: 14, marginBottom: 8,
+  },
+  histToggleOn: {backgroundColor: '#0d1f3c', borderColor: '#0d1f3c'},
+  histToggleTxt: {fontSize: 13, fontWeight: '700', color: '#B8960A'},
+  histToggleTxtOn: {color: '#C9A84C'},
+  scopeLine: {fontSize: 11, color: '#8a7f6a', marginBottom: 14, textAlign: 'center'},
+  // Current-test card — the default single-student view
+  currentCard: {
+    backgroundColor: '#ffffff', borderRadius: 16, padding: 18,
+    borderWidth: 1, borderColor: '#ece5d3', alignItems: 'center', marginBottom: 14,
+  },
+  currentLbl: {fontSize: 10, fontWeight: '700', color: '#9ca3af', letterSpacing: 1.2},
+  currentName: {fontSize: 15, fontWeight: '700', color: '#0d1f3c', marginTop: 6},
+  currentPct: {fontSize: 44, fontWeight: '700', color: '#B8960A', marginTop: 6},
+  currentMarks: {fontSize: 18, fontWeight: '600', color: '#0d1f3c'},
+  currentMeta: {fontSize: 12, color: '#8a7f6a', marginTop: 6},
   fieldLabel: {
     fontSize: 11, fontWeight: '700', color: '#6b7280',
     letterSpacing: 0.8, marginBottom: 8,
@@ -2865,6 +3024,7 @@ const styles = StyleSheet.create({
   },
   reportTitle: {fontSize: 17, fontWeight: '700', color: '#ffffff'},
   reportSub: {fontSize: 11, color: '#C9A84C', marginTop: 3},
+  reportScope: {fontSize: 11, color: '#ffffff', fontWeight: '600', marginTop: 6},
   // Summary cards — 3 across, then the last 2 grow to fill the second row.
   sumGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16},
   sumCard: {

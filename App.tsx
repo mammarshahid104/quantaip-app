@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,13 @@ import {
   ExclamationCircleIcon,
   EyeIcon,
   EyeSlashIcon,
+  CheckIcon,
 } from 'react-native-heroicons/outline';
+import {
+  loadCredentials,
+  saveCredentials,
+  clearCredentials,
+} from './services/credentials';
 import AdminScreen from './screens/AdminScreen';
 import TeacherScreen from './screens/TeacherScreen';
 import StudentScreen from './screens/StudentScreen';
@@ -73,8 +79,34 @@ function LoginScreen({navigation}: any) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [remember, setRemember] = useState(true);
+  // Blocks the form until AsyncStorage has been read, so the fields never
+  // flash empty and then fill themselves in under the user's fingers.
+  const [restoring, setRestoring] = useState(true);
 
   const detectedRole = detectRole(id);
+
+  // Pre-fill from the last remembered login. Deliberately a pre-fill and not an
+  // auto-submit: the user still taps Sign In, which keeps a shared device one
+  // tap away from being handed to the wrong person.
+  useEffect(() => {
+    let alive = true;
+    loadCredentials()
+      .then(saved => {
+        if (!alive) return;
+        setRemember(saved.remember);
+        if (saved.remember && saved.id) {
+          setId(saved.id);
+          setPass(saved.pass);
+        }
+      })
+      .finally(() => {
+        if (alive) setRestoring(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const handleLogin = async () => {
     if (!id || !pass) {
@@ -93,6 +125,12 @@ function LoginScreen({navigation}: any) {
       const email = `${id.toLowerCase()}@quantaip.edu.pk`;
       console.log('🔐 QUANTAIP Login →', {id, role: detectedRole, email});
       await auth().signInWithEmailAndPassword(email, pass);
+      // Only ever store credentials that have just been proven to work.
+      if (remember) {
+        await saveCredentials(id, pass);
+      } else {
+        await clearCredentials();
+      }
       const target =
         detectedRole === 'admin' ? 'Admin' :
         detectedRole === 'teacher' ? 'Teacher' :
@@ -196,6 +234,25 @@ function LoginScreen({navigation}: any) {
             </TouchableOpacity>
           </View>
 
+          {/* Remember me — on by default; the hint spells out the trade-off
+              so a school device gets it switched off knowingly. */}
+          <TouchableOpacity
+            style={styles.rememberRow}
+            onPress={() => setRemember(!remember)}
+            activeOpacity={0.7}>
+            <View style={[styles.checkbox, remember && styles.checkboxOn]}>
+              {remember ? <CheckIcon size={14} color="#D4AF37" /> : null}
+            </View>
+            <View style={styles.rememberTxtWrap}>
+              <Text style={styles.rememberTxt}>Remember me on this device</Text>
+              <Text style={styles.rememberHint}>
+                {remember
+                  ? 'Your ID and password will be filled in next time'
+                  : 'Turn off on shared or school devices'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
           {error ? (
             <View style={styles.errorWrap}>
               <ExclamationCircleIcon size={14} color={theme.colors.error} />
@@ -206,10 +263,10 @@ function LoginScreen({navigation}: any) {
           <TouchableOpacity
             style={[
               styles.loginBtn,
-              (!detectedRole || loading) && styles.loginBtnDisabled,
+              (!detectedRole || loading || restoring) && styles.loginBtnDisabled,
             ]}
             onPress={handleLogin}
-            disabled={!detectedRole || loading}
+            disabled={!detectedRole || loading || restoring}
             activeOpacity={0.8}>
             {loading ? (
               <ActivityIndicator color="#D4AF37" />
@@ -297,6 +354,17 @@ const styles = StyleSheet.create({
   },
   input: {flex: 1, padding: 13, fontSize: 14, color: theme.colors.navy, fontWeight: '500'},
   eyeBtn: {padding: 4},
+  rememberRow: {flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16},
+  checkbox: {
+    width: 22, height: 22, borderRadius: 6,
+    borderWidth: 1.5, borderColor: theme.colors.warmBorder,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: theme.colors.white,
+  },
+  checkboxOn: {backgroundColor: theme.colors.navy, borderColor: theme.colors.navy},
+  rememberTxtWrap: {flex: 1},
+  rememberTxt: {fontSize: 13, fontWeight: '600', color: theme.colors.navy},
+  rememberHint: {fontSize: 11, color: theme.colors.textMuted, marginTop: 2},
   errorWrap: {flexDirection: 'row', alignItems: 'center', marginTop: 10, marginBottom: 4},
   errorTxt: {fontSize: 13, color: theme.colors.error, fontWeight: '500'},
   loginBtn: {

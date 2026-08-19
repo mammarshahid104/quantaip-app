@@ -11,7 +11,6 @@ import {
   Modal,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
-import auth from '@react-native-firebase/auth';
 import firebase from '@react-native-firebase/app';
 
 // ============ SECONDARY APP — ACCOUNT FACTORY ============
@@ -57,6 +56,7 @@ import FeeScreen from './FeeScreen';
 
 import {getSchoolCode} from '../config';
 import {theme} from '../theme';
+import {confirmSignOut} from '../services/signOut';
 import {useClasses, classSort, matchClass, NO_CLASSES_MESSAGE} from '../services/classes';
 import {
   STUDENT_COLUMNS,
@@ -1236,7 +1236,7 @@ export default function AdminScreen({navigation}: any) {
       {/* NAVBAR */}
       <View style={styles.navbar}>
         <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
-        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
+        <TouchableOpacity onPress={() => confirmSignOut(navigation)}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>

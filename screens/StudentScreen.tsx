@@ -22,6 +22,7 @@ import {
 } from 'react-native-heroicons/outline';
 
 import {getSchoolCode} from '../config';
+import {confirmSignOut} from '../services/signOut';
 import {noteMetaLine} from '../services/notes';
 const TABS = ['Overview', 'Attendance', 'Homework', 'Grades', 'Results', 'Timetable'];
 
@@ -204,7 +205,7 @@ export default function StudentScreen({navigation}: any) {
           <Text style={styles.brand}>QUANT<Text style={styles.brandAccent}>AIP</Text></Text>
           <Text style={styles.navSub}>STUDENT PORTAL</Text>
         </View>
-        <TouchableOpacity onPress={() => {auth().signOut(); navigation.navigate('Login');}}>
+        <TouchableOpacity onPress={() => confirmSignOut(navigation)}>
           <ArrowRightOnRectangleIcon size={22} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>

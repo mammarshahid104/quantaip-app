@@ -31,19 +31,26 @@ const TIMEOUT_MS = 12000;
 export function localInsight(s: ClassInsightStats): string {
   const spread = Math.max(0, s.highest - s.lowest);
 
+  // A single test has no direction to report — the report's default view is
+  // scoped to the latest test only, so this is the common case, not the edge.
+  const hasTrend = s.testsConducted > 1;
+  const over = hasTrend
+    ? `across ${s.testsConducted} test(s)`
+    : 'in the latest test';
+
   const first =
     s.average >= 75
-      ? `${s.subject} is in good shape in ${s.className} — the class is averaging ${s.average}% across ${s.testsConducted} test(s), and results are ${s.trend}.`
+      ? `${s.subject} is in good shape in ${s.className} — the class is averaging ${s.average}% ${over}${hasTrend ? `, and results are ${s.trend}` : ''}.`
       : s.average >= 50
-      ? `${s.className} is averaging ${s.average}% in ${s.subject} over ${s.testsConducted} test(s), with results ${s.trend}.`
-      : `${s.className} is struggling in ${s.subject} at a ${s.average}% average across ${s.testsConducted} test(s), and results are ${s.trend}.`;
+      ? `${s.className} is averaging ${s.average}% in ${s.subject} ${over}${hasTrend ? `, with results ${s.trend}` : ''}.`
+      : `${s.className} is struggling in ${s.subject} at a ${s.average}% average ${over}${hasTrend ? `, and results are ${s.trend}` : ''}.`;
 
   const second =
     s.belowForty > 0
       ? `${s.belowForty} of ${s.studentCount} student(s) are still below 40% — pull that group for a short revision session before the next test.`
       : spread >= 40
       ? `Scores run from ${s.lowest}% to ${s.highest}%, so the class is splitting into two groups — pair the stronger students with the weaker ones for practice work.`
-      : s.trend === 'declining'
+      : s.trend === 'declining' && s.testsConducted > 1
       ? `Nobody is below 40%, but the recent slide suggests the latest topic did not land — re-teach it before moving on.`
       : `Nobody is below 40% and the spread is tight, so the class can move on to harder practice questions together.`;
 
@@ -60,7 +67,9 @@ function buildPrompt(s: ClassInsightStats): string {
     `Highest student average: ${s.highest}%`,
     `Lowest student average: ${s.lowest}%`,
     `Students below 40%: ${s.belowForty}`,
-    `Overall trend: ${s.trend}`,
+    s.testsConducted > 1
+      ? `Overall trend: ${s.trend}`
+      : 'Overall trend: not measurable — these figures cover a single test',
   ].join('\n');
 }
 
