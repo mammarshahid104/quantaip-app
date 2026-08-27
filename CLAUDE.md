@@ -28,6 +28,8 @@ Dark purple (`#1e1b4b`, `#7c3aed`) on white with Poppins as the primary font. Ba
 ### Hard Rules
 
 - **Never add `firebase-admin` to app dependencies.** It belongs only in the separate `admin-scripts` folder (server-side tooling). The app uses `@react-native-firebase/*` exclusively.
+- **Bump the OTA runtime version whenever native code changes.** Both `expo.runtimeVersion` in `app.json` and `expo_runtime_version` in `android/app/src/main/res/values/strings.xml` must be raised together. Skipping this ships a JS bundle to a binary that cannot run it.
+- **`app.json` keeps its top-level `name`/`displayName`.** `index.js` imports `name` from it for `AppRegistry`. The `expo` block sits alongside them; Expo ignores the top-level keys and RN ignores the `expo` block.
 - **Attendance reads must always use `attendanceMap` on the student doc.** Never query the per-day `attendance/{dateKey}/{className}` sub-collection from client screens — that collection is write-only from the teacher side and exists only for audit. The dual-write to `attendanceMap` is the intended read path.
 
 ### Authentication & Role Detection
@@ -80,3 +82,17 @@ IDs follow the pattern `{SCHOOL_CODE}-{ROLE}-{NNNN}` (admin uses 3 digits, other
 ### Timetable Structure
 
 Each class document in `timetable/` has keys for each day. Each day is an array of slot objects `{period, subject, teacher, time}`. `period: 0` is the break slot. Friday uses shorter timings (30 min periods vs 40 min). Admin can copy one day's subjects/teachers to all other days while preserving each day's correct timings.
+
+### OTA Updates (EAS Update)
+
+The app ships `expo-updates` (SDK 56, matching RN 0.85.3) so JavaScript-only fixes can reach users without a Play Store review. `services/otaUpdates.ts` holds the logic; `App.tsx` calls `useOtaUpdates()` once at the root.
+
+Updates are downloaded in the background and applied on the **next cold start** — the app deliberately never calls `Updates.reloadAsync()` on its own, because teachers enter attendance and marks in long-lived forms that a mid-session reload would discard. `applyUpdateNow()` is exported for the rare case where an immediate restart is wanted.
+
+**What OTA can ship:** JS/TS logic, screens and styling, business rules, bug fixes, and bundled JS assets.
+
+**What OTA cannot ship** (these need a new AAB and a store review): native modules or any new native dependency, `AndroidManifest.xml` changes including permissions, app icon, app name, `versionCode`/`versionName`, Gradle or Podfile changes, and anything under `android/` or `ios/`.
+
+Because this project builds locally with `./gradlew bundleRelease` rather than EAS Build, the values EAS Build would normally inject are set by hand in `AndroidManifest.xml` (`expo.modules.updates.*` meta-data, including the `expo-channel-name` request header). Those must stay in sync with the `expo.updates` block in `app.json`.
+
+Publish with `eas update --branch production --message "..."`.

@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">QUANTAIP EduOS</string>
+    <!-- expo-updates: OTA runtime version. An update is only delivered to a build
+         whose runtime version matches exactly. Bump this (and app.json's
+         expo.runtimeVersion) whenever native code / native deps change. -->
+    <string name="expo_runtime_version">1.0.0</string>
 </resources>

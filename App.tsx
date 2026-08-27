@@ -30,6 +30,7 @@ import {
   saveCredentials,
   clearCredentials,
 } from './services/credentials';
+import {useOtaUpdates} from './services/otaUpdates';
 import AdminScreen from './screens/AdminScreen';
 import TeacherScreen from './screens/TeacherScreen';
 import StudentScreen from './screens/StudentScreen';
@@ -293,6 +294,11 @@ function LoginScreen({navigation}: any) {
 }
 
 export default function App() {
+  // Downloads any published JS-only update in the background; it takes effect
+  // on the next cold start so nobody loses a half-entered form. See
+  // services/otaUpdates.ts.
+  useOtaUpdates();
+
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{headerShown: false}}>

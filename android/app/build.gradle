@@ -5,6 +5,35 @@ apply plugin: "com.google.gms.google-services"
 
 react {
     autolinkLibrariesWithApp()
+
+    // Bundle the JS through Expo CLI instead of the RN CLI. This is what lets
+    // `expo-updates` embed an update manifest in the binary, which is required
+    // for OTA updates to work at all.
+    //
+    // Written by hand rather than by install-expo-modules, which emitted a form
+    // that silently produces garbage on this project:
+    //   * it used Groovy's `.execute()`, whose stdout is empty when the node
+    //     process fails, so a failure became `new File("")` -> the android/app
+    //     directory, and Gradle only complained much later with a confusing
+    //     "expected a file but it was a directory".
+    //   * it resolved '@expo/cli' from the project root, but npm does not hoist
+    //     it — it lives at node_modules/expo/node_modules/@expo/cli — so the
+    //     resolve threw MODULE_NOT_FOUND.
+    // providers.exec fails loudly on a non-zero exit, and resolving relative to
+    // expo's own package.json finds the CLI wherever npm chose to put it.
+    entryFile = file(providers.exec {
+        workingDir(rootDir)
+        commandLine("node", "-e", "require('expo/scripts/resolveAppEntry')",
+            rootDir.getAbsoluteFile().getParentFile().getAbsolutePath(), "android", "absolute")
+    }.standardOutput.asText.get().trim())
+
+    cliFile = new File(providers.exec {
+        workingDir(rootDir)
+        commandLine("node", "--print",
+            "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })")
+    }.standardOutput.asText.get().trim())
+
+    bundleCommand = "export:embed"
 }
 
 def enableProguardInReleaseBuilds = false

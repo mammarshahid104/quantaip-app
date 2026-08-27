@@ -38,5 +38,18 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+
+      <!-- expo-updates (EAS Update / OTA). The native runtime reads its config from
+           here, NOT from app.json, because this project builds locally instead of
+           with EAS Build. Keep these values in sync with the "expo" block in app.json. -->
+      <meta-data android:name="expo.modules.updates.ENABLED" android:value="true" />
+      <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/34011d8d-19da-4af4-8785-46f613a56f99" />
+      <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version" />
+      <!-- Channel this binary subscribes to. EAS Build would inject this automatically;
+           with local Gradle builds it must be set by hand. -->
+      <meta-data android:name="expo.modules.updates.UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY" android:value="{&quot;expo-channel-name&quot;:&quot;production&quot;}" />
+      <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS" />
+      <!-- 0 = never block startup on the network; a downloaded update applies on the NEXT launch. -->
+      <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0" />
     </application>
 </manifest>

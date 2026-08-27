@@ -78,3 +78,7 @@ serviceAccount.json
 
 # Source-asset archives — unpacked originals live in assets/branding/
 *.zip
+# Expo
+.expo
+dist/
+web-build/

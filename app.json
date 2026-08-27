@@ -1,4 +1,35 @@
 {
   "name": "quantaipapp",
-  "displayName": "QUANTAIP EduOS"
+  "displayName": "QUANTAIP EduOS",
+  "expo": {
+    "name": "QUANTAIP EduOS",
+    "slug": "quantaipapp",
+    "owner": "ammarshahid",
+    "version": "1.0.2",
+    "platforms": [
+      "android",
+      "ios"
+    ],
+    "android": {
+      "package": "com.quantaipapp"
+    },
+    "ios": {
+      "bundleIdentifier": "com.quantaipapp"
+    },
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "enabled": true,
+      "url": "https://u.expo.dev/34011d8d-19da-4af4-8785-46f613a56f99",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      },
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "extra": {
+      "eas": {
+        "projectId": "34011d8d-19da-4af4-8785-46f613a56f99"
+      }
+    }
+  }
 }
