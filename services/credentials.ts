@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const KEY_ID = '@quantaip/saved_id';
 const KEY_PASS = '@quantaip/saved_pass';
 const KEY_REMEMBER = '@quantaip/remember_me';
+const KEY_ASKED = '@quantaip/asked_remember_me';
 
 const CIPHER_KEY = 'QUANTAIP-EduOS-2026';
 
@@ -97,6 +98,28 @@ export const clearCredentials = async () => {
 export const forgetCredentials = async () => {
   try {
     await AsyncStorage.multiRemove([KEY_ID, KEY_PASS]);
+  } catch (e) {
+    console.log('❌ QUANTAIP Error:', e);
+  }
+};
+
+// Has this device already been asked for permission to store a password?
+// Storing someone's password deserves an explicit yes, but asking on every
+// login would train people to tap it away, so the answer is asked once and
+// then remembered. A read failure reports "already asked" so a broken
+// AsyncStorage cannot turn into a prompt on every single login.
+export const hasAskedToRemember = async (): Promise<boolean> => {
+  try {
+    return (await AsyncStorage.getItem(KEY_ASKED)) === 'true';
+  } catch (e) {
+    console.log('❌ QUANTAIP Error:', e);
+    return true;
+  }
+};
+
+export const markAskedToRemember = async () => {
+  try {
+    await AsyncStorage.setItem(KEY_ASKED, 'true');
   } catch (e) {
     console.log('❌ QUANTAIP Error:', e);
   }

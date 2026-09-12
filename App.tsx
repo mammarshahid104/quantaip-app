@@ -8,6 +8,7 @@ import {
   StatusBar,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import {NavigationContainer} from '@react-navigation/native';
@@ -24,11 +25,15 @@ import {
   EyeIcon,
   EyeSlashIcon,
   CheckIcon,
+  TrashIcon,
 } from 'react-native-heroicons/outline';
 import {
   loadCredentials,
   saveCredentials,
   clearCredentials,
+  forgetCredentials,
+  hasAskedToRemember,
+  markAskedToRemember,
 } from './services/credentials';
 import {useOtaUpdates} from './services/otaUpdates';
 import AdminScreen from './screens/AdminScreen';
@@ -74,6 +79,45 @@ function RoleIcon({role, size, color}: {role: string, size: number, color: strin
   return null;
 }
 
+// One-time permission prompt, shown just before a password is written to this
+// device for the first time. Wrapped in a promise so the login flow can wait
+// for an answer instead of navigating away from under the dialog.
+const askPermissionToRemember = (): Promise<boolean> =>
+  new Promise(resolve => {
+    Alert.alert(
+      'Save Login Details?',
+      'Would you like this device to remember your ID and password for faster login next time?\n\n' +
+        'Only choose yes on a phone that is yours — on a shared or school device, anyone who opens the app would be able to sign in as you.',
+      [
+        {text: 'No', style: 'cancel', onPress: () => resolve(false)},
+        {text: 'Yes, Remember Me', onPress: () => resolve(true)},
+      ],
+      // A tap outside the dialog (Android) has to settle the promise too,
+      // otherwise the login would sit forever behind an await that never
+      // resolves and the spinner would never stop.
+      {cancelable: false, onDismiss: () => resolve(false)},
+    );
+  });
+
+// Store a login that has just been proven to work — asking permission the first
+// time, and only the first time. Once the device has been asked, ticking the
+// checkbox is itself the answer and there is nothing left to prompt about.
+const persistCredentials = async (loginId: string, loginPass: string) => {
+  if (await hasAskedToRemember()) {
+    await saveCredentials(loginId, loginPass);
+    return;
+  }
+  const agreed = await askPermissionToRemember();
+  await markAskedToRemember();
+  if (agreed) {
+    await saveCredentials(loginId, loginPass);
+  } else {
+    // Declining also unticks the box for next time, so the screen stops
+    // implying the password is being kept when it is not.
+    await clearCredentials();
+  }
+};
+
 function LoginScreen({navigation}: any) {
   const [id, setId] = useState('');
   const [pass, setPass] = useState('');
@@ -84,6 +128,9 @@ function LoginScreen({navigation}: any) {
   // Blocks the form until AsyncStorage has been read, so the fields never
   // flash empty and then fill themselves in under the user's fingers.
   const [restoring, setRestoring] = useState(true);
+  // Whose login is currently pre-filled, if any. Drives the "Forget saved
+  // login" link — there is no point offering to forget nothing.
+  const [savedId, setSavedId] = useState('');
 
   const detectedRole = detectRole(id);
 
@@ -99,6 +146,7 @@ function LoginScreen({navigation}: any) {
         if (saved.remember && saved.id) {
           setId(saved.id);
           setPass(saved.pass);
+          setSavedId(saved.id);
         }
       })
       .finally(() => {
@@ -108,6 +156,30 @@ function LoginScreen({navigation}: any) {
       alive = false;
     };
   }, []);
+
+  // Shared-device escape hatch: clear someone else's saved login without
+  // having to sign in as them first. School office phones and family handsets
+  // get passed around, and the person holding it may not be the one stored.
+  const handleForgetSaved = () => {
+    Alert.alert(
+      'Forget Saved Login?',
+      `This device will stop filling in ${savedId} automatically. Signing in again will just mean typing the ID and password.`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Forget It',
+          style: 'destructive',
+          onPress: async () => {
+            await forgetCredentials();
+            setId('');
+            setPass('');
+            setSavedId('');
+            setError('');
+          },
+        },
+      ],
+    );
+  };
 
   const handleLogin = async () => {
     if (!id || !pass) {
@@ -128,7 +200,7 @@ function LoginScreen({navigation}: any) {
       await auth().signInWithEmailAndPassword(email, pass);
       // Only ever store credentials that have just been proven to work.
       if (remember) {
-        await saveCredentials(id, pass);
+        await persistCredentials(id, pass);
       } else {
         await clearCredentials();
       }
@@ -280,6 +352,17 @@ function LoginScreen({navigation}: any) {
               </View>
             )}
           </TouchableOpacity>
+
+          {/* Only offered when there is actually a saved login to clear. */}
+          {savedId ? (
+            <TouchableOpacity
+              style={styles.forgetRow}
+              onPress={handleForgetSaved}
+              activeOpacity={0.7}>
+              <TrashIcon size={13} color={theme.colors.textMuted} />
+              <Text style={styles.forgetTxt}>Forget saved login</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* FOOTER */}
@@ -368,6 +451,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.white,
   },
   checkboxOn: {backgroundColor: theme.colors.navy, borderColor: theme.colors.navy},
+  forgetRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, marginTop: 14, paddingVertical: 6,
+  },
+  forgetTxt: {fontSize: 12, color: theme.colors.textMuted, textDecorationLine: 'underline'},
   rememberTxtWrap: {flex: 1},
   rememberTxt: {fontSize: 13, fontWeight: '600', color: theme.colors.navy},
   rememberHint: {fontSize: 11, color: theme.colors.textMuted, marginTop: 2},
